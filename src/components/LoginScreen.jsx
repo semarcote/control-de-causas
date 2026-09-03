@@ -212,14 +212,6 @@ export default function LoginScreen({ users, onLogin, onRegisterUser }) {
           {/* TAB 2: CREAR NUEVO USUARIO */}
           {activeTab === 'register' && (
             <form onSubmit={handleRegisterSubmit} className="space-y-3.5 text-xs">
-              <div className="rounded-xl bg-amber-500/10 p-2.5 border border-amber-500/30 text-[11px] text-amber-300 flex items-start gap-2">
-                <Shield className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
-                <div>
-                  <span className="font-bold block text-white">Usuario Estándar (Sin Permisos de Administrador)</span>
-                  <span>Las cuentas registradas desde aquí no tienen acceso a la gestión de usuarios. Se generará automáticamente una pestaña con tu nombre en la planilla de Google Sheets.</span>
-                </div>
-              </div>
-
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">
                   Nombre Completo <span className="text-rose-400">*</span>
