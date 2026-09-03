@@ -54,7 +54,11 @@ export default function NewCausaModal({ onClose, onCreate }) {
     const cleanSuffix = (ippSuffix || '00').replace(/\D/g, '').padStart(2, '0').slice(-2);
     const fullFormattedIPP = `18-${cleanDept}-${paddedNum}-${cleanYear}/${cleanSuffix}`;
 
-    if (formData.detenido === 'SI' && formData.fecha_detencion) {
+    if (formData.detenido === 'SI') {
+      if (!formData.fecha_detencion || !formData.fecha_detencion.trim()) {
+        alert('Si la persona se encuentra DETENIDA, debe ingresar obligatoriamente la Fecha de Detención para poder guardar.');
+        return;
+      }
       if (isDateInFuture(formData.fecha_detencion)) {
         alert(`La fecha de detención ingresada (${formData.fecha_detencion}) es errónea: No puede ser una fecha futura posterior al día de hoy.`);
         return;

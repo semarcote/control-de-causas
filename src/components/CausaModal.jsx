@@ -453,8 +453,12 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
     const finalDetenido = specialStatus === 'Presentada' ? 'SI' : (specialStatus === 'Excarcelado' || specialStatus === 'Libertad' ? 'NO' : detenidoState);
     const isDetenido = finalDetenido === 'SI';
 
-    // Validate Fecha de Detención (ONLY if Detenido = SI)
-    if (isDetenido && fechaDetencionState) {
+    // Validate Fecha de Detención (REQUIRED if Detenido = SI)
+    if (isDetenido) {
+      if (!fechaDetencionState || !fechaDetencionState.trim()) {
+        alert('Si el imputado se encuentra DETENIDO, debe ingresar obligatoriamente la Fecha de Detención para poder guardar.');
+        return;
+      }
       if (isDateInFuture(fechaDetencionState)) {
         alert(`La fecha de detención ingresada (${fechaDetencionState}) es errónea: No puede ser una fecha futura posterior al día de hoy.`);
         return;
