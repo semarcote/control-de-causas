@@ -150,6 +150,20 @@ export default function Header({
           )}
         </button>
 
+        {(currentUser?.role === 'Administrador General' || currentUser?.name?.toLowerCase().includes('marcote')) && (
+          <button
+            onClick={() => onPageChange('usuarios')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activePage === 'usuarios'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-slate-800'
+            }`}
+          >
+            <Users className="h-4 w-4 text-indigo-400" />
+            <span>Gestión de Usuarios</span>
+          </button>
+        )}
+
       </div>
 
     </header>
