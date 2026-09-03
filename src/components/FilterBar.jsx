@@ -1,6 +1,6 @@
 import React from 'react';
-import { Search, Filter, ArrowUpDown, X, FileText, MapPin } from 'lucide-react';
-import { INICIO_OPTIONS } from './CausasTable';
+import { Search, Filter, ArrowUpDown, X, FileText, MapPin, Calendar } from 'lucide-react';
+import { INICIO_OPTIONS, formatDateMask } from './CausasTable';
 
 export default function FilterBar({
   searchTerm,
@@ -11,23 +11,27 @@ export default function FilterBar({
   onSumarioFilterChange,
   inicioFilter = 'todos',
   onInicioFilterChange,
+  fechaDesdeFilter = '',
+  onFechaDesdeFilterChange,
   sortBy,
   onSortByChange,
   totalResults,
   onClearFilters
 }) {
-  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'todos' || sumarioFilter !== 'todos' || (inicioFilter && inicioFilter !== 'todos');
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'todos' || sumarioFilter !== 'todos' || (inicioFilter && inicioFilter !== 'todos') || fechaDesdeFilter !== '';
 
   const statusChips = [
     { id: 'en trámite', label: 'En Trámite' },
-    { id: 'paradero', label: 'Paradero' },
-    { id: 'captura', label: 'Captura' },
+    { id: 'revisar', label: '⚠️ Para Revisar' },
+    { id: 'esperar', label: '⏳ En Espera' },
     { id: 'archivada', label: 'Archivadas' },
     { id: 'desestimada', label: 'Desestimadas' },
+    { id: 'remisión a otra ufi', label: 'Remisión UFI' },
+    { id: 'incompetencia', label: 'Incompetencia' },
     { id: 'elevada a juicio', label: 'Elevadas a Juicio' },
     { id: 'sobreseimiento', label: 'Sobreseimientos' },
-    { id: 'incompetencia', label: 'Incompetencia' },
-    { id: 'remisión a otra ufi', label: 'Remisión UFI' },
+    { id: 'paradero', label: 'Paradero' },
+    { id: 'captura', label: 'Captura' },
     { id: 'todos', label: 'Todas' }
   ];
 
@@ -149,6 +153,38 @@ export default function FilterBar({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="h-4 w-px bg-slate-800 mx-1 hidden sm:block" />
+
+          {/* Filtro Fecha de Ingreso Desde */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-slate-400 flex items-center gap-1">
+              <Calendar className="h-3.5 w-3.5 text-emerald-400" /> Ingresadas Desde:
+            </span>
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                placeholder="DD/MM/AA"
+                value={fechaDesdeFilter}
+                onChange={(e) => onFechaDesdeFilterChange && onFechaDesdeFilterChange(formatDateMask(e.target.value))}
+                className={`w-28 rounded-lg py-1 px-2.5 text-xs font-mono font-semibold border transition focus:outline-none ${
+                  fechaDesdeFilter
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm ring-1 ring-emerald-500/30 font-bold'
+                    : 'bg-slate-800/80 text-slate-300 border-slate-700/50 hover:bg-slate-800 hover:text-white'
+                }`}
+              />
+              {fechaDesdeFilter && (
+                <button
+                  type="button"
+                  onClick={() => onFechaDesdeFilterChange && onFechaDesdeFilterChange('')}
+                  className="ml-1 text-slate-400 hover:text-rose-400 transition"
+                  title="Limpiar fecha desde"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

@@ -17,6 +17,14 @@ export default function LoginScreen({ users, onLogin, onRegisterUser }) {
   const [regRole, setRegRole] = useState('Instructor Judicial');
   const [regSuccess, setRegSuccess] = useState('');
 
+  const handleEmailChange = (val, setter, currentVal) => {
+    if (val.endsWith('@') && !currentVal.endsWith('@')) {
+      setter(`${val}mpba.gov.ar`);
+    } else {
+      setter(val);
+    }
+  };
+
   const handleLoginSubmit = (e) => {
     e.preventDefault();
     setError('');
@@ -92,8 +100,8 @@ export default function LoginScreen({ users, onLogin, onRegisterUser }) {
             <h1 className="text-2xl font-black tracking-tight text-white">
               CONTROL DE CAUSAS
             </h1>
-            <p className="text-xs font-bold uppercase tracking-widest text-blue-400 mt-1">
-              UFI N° 10 - Depto. Judicial
+            <p className="text-[11px] font-bold uppercase tracking-wider text-blue-400 mt-1">
+              Ministerio Público Fiscal • Dpto. Judicial Zárate-Campana
             </p>
           </div>
           <p className="text-xs text-slate-400 max-w-xs mx-auto">
@@ -158,10 +166,10 @@ export default function LoginScreen({ users, onLogin, onRegisterUser }) {
                   <input
                     type="text"
                     required
-                    placeholder="ejemplo@ufi10.gob.ar"
+                    placeholder="ejemplo@mpba.gov.ar"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition"
+                    onChange={(e) => handleEmailChange(e.target.value, setEmail, email)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition no-uppercase"
                   />
                 </div>
               </div>
@@ -178,7 +186,7 @@ export default function LoginScreen({ users, onLogin, onRegisterUser }) {
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition"
+                    className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition no-uppercase"
                   />
                   <button
                     type="button"
@@ -224,7 +232,7 @@ export default function LoginScreen({ users, onLogin, onRegisterUser }) {
                     placeholder="Ej. Dr. Carlos Gómez"
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-emerald-500 focus:outline-none"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-emerald-500 focus:outline-none no-uppercase"
                   />
                 </div>
               </div>
@@ -238,10 +246,10 @@ export default function LoginScreen({ users, onLogin, onRegisterUser }) {
                   <input
                     type="email"
                     required
-                    placeholder="cgomez@ufi10.gob.ar"
+                    placeholder="cgomez@mpba.gov.ar"
                     value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-emerald-500 focus:outline-none"
+                    onChange={(e) => handleEmailChange(e.target.value, setRegEmail, regEmail)}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-emerald-500 focus:outline-none no-uppercase"
                   />
                 </div>
               </div>
@@ -258,7 +266,7 @@ export default function LoginScreen({ users, onLogin, onRegisterUser }) {
                     placeholder="••••••••"
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-emerald-500 focus:outline-none"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-emerald-500 focus:outline-none no-uppercase"
                   />
                 </div>
               </div>
@@ -329,7 +337,7 @@ export default function LoginScreen({ users, onLogin, onRegisterUser }) {
 
         {/* Footer */}
         <p className="text-center text-[11px] text-slate-500">
-          UFI N° 10 &copy; 2026 - Control de Causas en Trámite
+          Ministerio Público Fiscal &copy; 2026 - Control de Causas en Trámite
         </p>
 
       </div>

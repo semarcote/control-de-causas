@@ -2,7 +2,7 @@ export const SHEETS_URL_KEY = 'control_causas_sheets_url';
 export const LAST_SYNC_KEY = 'control_causas_last_sync';
 
 export const APPS_SCRIPT_TEMPLATE = `/**
- * GOOGLE APPS SCRIPT PARA CONTROL DE CAUSAS (UFI N° 10)
+ * GOOGLE APPS SCRIPT PARA CONTROL DE CAUSAS (MINISTERIO PÚBLICO FISCAL)
  * 
  * Instrucciones de instalación:
  * 1. Abre tu hoja de cálculo en Google Sheets (o crea una nueva).
@@ -20,10 +20,9 @@ export const APPS_SCRIPT_TEMPLATE = `/**
 const SHEET_NAME = 'SEBASTIÁN MARCOTE';
 
 const HEADERS = [
-  'id', 'ipp', 'estado', 'revisado', 'revisar_dias', 'caratula', 
-  'sumario', 'tramite', 'detenido', 'vencimiento_fecha', 
-  'vencimiento_pp', 'vencimiento_ipp', 'vencimiento_pp1', 
-  'vencimiento_pp2', 'pp_prorrogada', 'pericias'
+  'id', 'ipp', 'estado', 'revision', 'revisado', 'revisar_dias', 'caratula', 
+  'sumario', 'denunciado_en', 'fecha_inicio', 'tramite', 'detenido',
+  'vencimiento_pp1', 'vencimiento_pp2', 'vencimiento_ipp', 'pp_prorrogada', 'pericias', 'audiencias'
 ];
 
 function deleteUnusedDefaultSheets(ss) {
@@ -35,6 +34,107 @@ function deleteUnusedDefaultSheets(ss) {
         ss.deleteSheet(s);
       }
     });
+  } catch (e) {}
+}
+
+function cleanAndMigrateSheetHeaders(sheet) {
+  try {
+    if (!sheet) return;
+    const data = sheet.getDataRange().getValues();
+    if (data.length === 0) {
+      sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS])
+        .setFontWeight('bold')
+        .setBackground('#1e293b')
+        .setFontColor('#ffffff');
+      sheet.setFrozenRows(1);
+      return;
+    }
+
+    const hRow = data[0].map(h => String(h || '').trim().toLowerCase());
+    const hasFechaInicioCol = hRow.includes('fecha_inicio') || hRow.includes('fecha inicio');
+    const currentMaxCols = sheet.getMaxColumns();
+    const needsMigration = !hasFechaInicioCol || hRow.length !== HEADERS.length || currentMaxCols !== HEADERS.length;
+
+    if (needsMigration && data.length > 1) {
+      const oldMap = {};
+      for (let h = 0; h < hRow.length; h++) {
+        if (hRow[h]) oldMap[hRow[h]] = h;
+      }
+
+      const newRows = [];
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        if (!row[0] && !row[1]) continue;
+
+        const getOld = (name) => {
+          if (oldMap[name] !== undefined && oldMap[name] < row.length) {
+            const v = row[oldMap[name]];
+            return (v !== undefined && v !== null && String(v).trim() !== '') ? String(v).trim() : null;
+          }
+          return null;
+        };
+
+        let rawEstado = getOld('estado') ?? String(row[2] || 'En Trámite');
+        let rawRev = getOld('revision') ?? '';
+        if (rawEstado.toLowerCase() === 'esperar' || rawEstado.toLowerCase() === 'revisar') {
+          if (!rawRev) rawRev = rawEstado;
+          rawEstado = 'En Trámite';
+        }
+
+        const fInicio = getOld('fecha_inicio') ?? getOld('fecha inicio') ?? getOld('revisado') ?? String(row[3] || '');
+        const vPP1 = getOld('vencimiento_pp1') ?? getOld('vencimiento pp1') ?? getOld('vencimiento_pp') ?? '';
+        const vPP2 = getOld('vencimiento_pp2') ?? getOld('vencimiento pp2') ?? '';
+        const vIPP = getOld('vencimiento_ipp') ?? getOld('venc_ipp') ?? getOld('vencimiento ipp') ?? getOld('venc. ipp') ?? getOld('vencimiento_fecha') ?? '';
+        const ppProrr = getOld('pp_prorrogada') ?? getOld('pp prorrogada') ?? '';
+        const pericias = getOld('pericias') ?? '[]';
+        const auds = getOld('audiencias') ?? '[]';
+
+        newRows.push([
+          getOld('id') ?? String(row[0] || ''),
+          getOld('ipp') ?? String(row[1] || ''),
+          rawEstado,
+          rawRev || (rawEstado.toLowerCase() === 'en trámite' || rawEstado.toLowerCase() === 'en tramite' ? 'Esperar' : '-'),
+          getOld('revisado') ?? String(row[3] || ''),
+          getOld('revisar_dias') ?? getOld('revisar dias') ?? String(row[4] || ''),
+          getOld('caratula') ?? String(row[5] || ''),
+          getOld('sumario') ?? String(row[6] || ''),
+          getOld('denunciado_en') ?? getOld('denunciado en') ?? String(row[7] || ''),
+          fInicio,
+          getOld('tramite') ?? String(row[8] || ''),
+          getOld('detenido') ?? String(row[9] || ''),
+          vPP1,
+          vPP2,
+          vIPP,
+          String(ppProrr).toLowerCase() === 'true' || String(ppProrr).toUpperCase() === 'SI' ? 'true' : 'false',
+          pericias,
+          auds
+        ]);
+      }
+
+      sheet.clearContents();
+
+      sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS])
+        .setFontWeight('bold')
+        .setBackground('#1e293b')
+        .setFontColor('#ffffff');
+
+      if (newRows.length > 0) {
+        sheet.getRange(2, 1, newRows.length, HEADERS.length).setValues(newRows);
+      }
+
+      if (sheet.getMaxColumns() > HEADERS.length) {
+        sheet.deleteColumns(HEADERS.length + 1, sheet.getMaxColumns() - HEADERS.length);
+      }
+    } else {
+      sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS])
+        .setFontWeight('bold')
+        .setBackground('#1e293b')
+        .setFontColor('#ffffff');
+      if (sheet.getMaxColumns() > HEADERS.length) {
+        sheet.deleteColumns(HEADERS.length + 1, sheet.getMaxColumns() - HEADERS.length);
+      }
+    }
+    sheet.setFrozenRows(1);
   } catch (e) {}
 }
 
@@ -67,18 +167,78 @@ function getOrCreateSheet(userName) {
     }
   }
 
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(HEADERS);
-    sheet.getRange(1, 1, 1, HEADERS.length)
-      .setFontWeight('bold')
-      .setBackground('#1e293b')
-      .setFontColor('#ffffff');
-    sheet.setFrozenRows(1);
-  }
-
+  cleanAndMigrateSheetHeaders(sheet);
   deleteUnusedDefaultSheets(ss);
 
   return sheet;
+}
+
+function updateCausaInSheet(sheet, causa) {
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return false;
+
+  const targetId = String(causa.id || '').trim().toLowerCase();
+  const targetIpp = String(causa.ipp || '').trim().toLowerCase();
+
+  let targetRowIndex = -1;
+  for (let i = 1; i < data.length; i++) {
+    const rowId = String(data[i][0] || '').trim().toLowerCase();
+    const rowIpp = String(data[i][1] || '').trim().toLowerCase();
+
+    if ((targetId && rowId === targetId) || (targetIpp && rowIpp === targetIpp)) {
+      targetRowIndex = i + 1; // 1-indexed for Sheets API
+      break;
+    }
+  }
+
+  if (targetRowIndex > 0) {
+    const updatedRow = causaToRow(causa);
+    sheet.getRange(targetRowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
+    return true;
+  }
+  return false;
+}
+
+function deleteCausaInSheet(sheet, id, ipp) {
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return false;
+
+  const targetId = String(id || '').trim().toLowerCase();
+  const targetIpp = String(ipp || '').trim().toLowerCase();
+
+  const rowsToDelete = [];
+  for (let i = 1; i < data.length; i++) {
+    const rowId = String(data[i][0] || '').trim().toLowerCase();
+    const rowIpp = String(data[i][1] || '').trim().toLowerCase();
+
+    if ((targetId && rowId === targetId) || (targetIpp && rowIpp === targetIpp)) {
+      rowsToDelete.push(i + 1);
+    }
+  }
+
+  for (let j = rowsToDelete.length - 1; j >= 0; j--) {
+    sheet.deleteRow(rowsToDelete[j]);
+  }
+  return rowsToDelete.length > 0;
+}
+
+function syncAllCausasForUser(sheet, causasList) {
+  if (!Array.isArray(causasList)) return;
+
+  sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS])
+    .setFontWeight('bold')
+    .setBackground('#1e293b')
+    .setFontColor('#ffffff');
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
+  }
+
+  if (causasList.length === 0) return;
+
+  const newRows = causasList.map(c => causaToRow(c));
+  sheet.getRange(2, 1, newRows.length, HEADERS.length).setValues(newRows);
 }
 
 function getOrCreateUsersSheet() {
@@ -96,7 +256,7 @@ function getOrCreateUsersSheet() {
 
     // Auto registrar Administrador General
     const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy');
-    sheet.appendRow(['u-admin-marcote', 'SEBASTIÁN MARCOTE', 'admin@ufi10.gob.ar', 'admin', 'Administrador General', nowStr]);
+    sheet.appendRow(['u-admin-marcote', 'SEBASTIÁN MARCOTE', 'admin@mpba.gov.ar', 'admin', 'Administrador General', nowStr]);
   } else {
     if (sheet.getName() !== 'USUARIOS') {
       try { sheet.setName('USUARIOS'); } catch(e){}
@@ -120,13 +280,41 @@ function getOrCreateUsersSheet() {
   return sheet;
 }
 
+function syncAllUsersSheet(ss, usersList) {
+  if (!Array.isArray(usersList)) return;
+  const uSheet = getOrCreateUsersSheet();
+  const uHeaders = ['ID', 'NOMBRE', 'EMAIL', 'PASSWORD', 'ROLE', 'FECHA_REGISTRO'];
+
+  uSheet.getRange(1, 1, 1, uHeaders.length).setValues([uHeaders])
+    .setFontWeight('bold')
+    .setBackground('#1e293b')
+    .setFontColor('#ffffff');
+
+  const lastRow = uSheet.getLastRow();
+  if (lastRow > 1) {
+    uSheet.getRange(2, 1, lastRow - 1, uSheet.getLastColumn()).clearContent();
+  }
+
+  if (usersList.length === 0) return;
+
+  const newRows = usersList.map(u => [
+    u.id || '',
+    u.name || '',
+    u.email || '',
+    u.password || '',
+    u.role || '',
+    u.fechaRegistro || ''
+  ]);
+  uSheet.getRange(2, 1, newRows.length, uHeaders.length).setValues(newRows);
+}
+
 function saveUserToSheet(userObj) {
   if (!userObj) return;
-  const idVal = userObj.id || userObj.userId || ('u-' + Date.now());
-  const nameVal = (userObj.name || userObj.userName || '').toUpperCase();
-  const emailVal = (userObj.email || userObj.userEmail || '').toLowerCase();
-  const passVal = userObj.password || userObj.userPassword || '';
-  const roleVal = userObj.role || userObj.userRole || 'Instructor Judicial';
+  const idVal = String(userObj.id || userObj.userId || ('u-' + Date.now())).trim();
+  const nameVal = String(userObj.name || userObj.userName || '').trim().toUpperCase();
+  const emailVal = String(userObj.email || userObj.userEmail || '').trim().toLowerCase();
+  const passVal = String(userObj.password || userObj.userPassword || userObj.pass || '').trim();
+  const roleVal = String(userObj.role || userObj.userRole || 'Instructor Judicial').trim();
 
   if (!nameVal && !emailVal) return;
 
@@ -134,65 +322,164 @@ function saveUserToSheet(userObj) {
   const uData = uSheet.getDataRange().getValues();
   let rowIdx = -1;
   for (let i = 1; i < uData.length; i++) {
-    if ((idVal && String(uData[i][0]) === String(idVal)) || (emailVal && String(uData[i][2]).toLowerCase() === emailVal)) {
+    const rowId = String(uData[i][0] || '').trim();
+    const rowName = String(uData[i][1] || '').trim().toUpperCase();
+    const rowEmail = String(uData[i][2] || '').trim().toLowerCase();
+
+    if ((idVal && rowId === idVal) || (emailVal && rowEmail === emailVal) || (nameVal && rowName === nameVal)) {
       rowIdx = i + 1;
       break;
     }
   }
+
   const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy');
-  const uRow = [idVal, nameVal, emailVal, passVal, roleVal, nowStr];
+  const existingDate = (rowIdx > 0 && uData[rowIdx - 1][5]) ? String(uData[rowIdx - 1][5]) : nowStr;
+  const finalId = (rowIdx > 0 && uData[rowIdx - 1][0]) ? String(uData[rowIdx - 1][0]) : idVal;
+  const existingPass = (rowIdx > 0 && uData[rowIdx - 1][3]) ? String(uData[rowIdx - 1][3]) : '';
+
+  const finalPass = passVal ? passVal : (existingPass || 'admin');
+
+  const uRow = [finalId, nameVal, emailVal, finalPass, roleVal, existingDate];
+
   if (rowIdx > 0) {
     uSheet.getRange(rowIdx, 1, 1, uRow.length).setValues([uRow]);
   } else {
     uSheet.appendRow(uRow);
   }
+
+  deduplicateUsersSheet(uSheet);
 }
 
-function rowToCausa(row) {
+function deduplicateUsersSheet(uSheet) {
+  try {
+    if (!uSheet) uSheet = getOrCreateUsersSheet();
+    const data = uSheet.getDataRange().getValues();
+    if (data.length <= 2) return;
+
+    const seenKeys = {};
+    const rowsToDelete = [];
+
+    for (let i = 1; i < data.length; i++) {
+      const email = String(data[i][2] || '').trim().toLowerCase();
+      const name = String(data[i][1] || '').trim().toUpperCase();
+      const key = email || name;
+
+      if (key && seenKeys[key]) {
+        rowsToDelete.push(i + 1);
+      } else if (key) {
+        seenKeys[key] = true;
+      }
+    }
+
+    for (let j = rowsToDelete.length - 1; j >= 0; j--) {
+      uSheet.deleteRow(rowsToDelete[j]);
+    }
+  } catch (e) {}
+}
+
+function rowToCausa(row, headersMap) {
+  const getVal = (name) => {
+    if (headersMap && headersMap[name] !== undefined && headersMap[name] < row.length) {
+      const v = row[headersMap[name]];
+      return (v !== undefined && v !== null && String(v).trim() !== '') ? String(v).trim() : null;
+    }
+    return null;
+  };
+
+  let estadoVal = getVal('estado') ?? String(row[2] || 'En Trámite');
+  let revisionVal = getVal('revision') ?? (row.length >= 17 ? String(row[3] || '') : '');
+
+  if (estadoVal.toLowerCase() === 'esperar' || estadoVal.toLowerCase() === 'revisar') {
+    if (!revisionVal) revisionVal = estadoVal;
+    estadoVal = 'En Trámite';
+  }
+
+  const revisado = getVal('revisado') ?? (row.length >= 17 ? String(row[4] || '') : String(row[3] || ''));
+  const revisarDias = getVal('revisar_dias') ?? getVal('revisar dias') ?? (row.length >= 17 ? String(row[5] || '') : String(row[4] || ''));
+  const caratula = getVal('caratula') ?? (row.length >= 17 ? String(row[6] || '') : String(row[5] || ''));
+  const sumario = getVal('sumario') ?? (row.length >= 17 ? String(row[7] || '') : String(row[6] || ''));
+  const denunciadoEn = getVal('denunciado_en') ?? getVal('denunciado en') ?? (row.length >= 17 ? String(row[8] || '') : String(row[7] || ''));
+  const fechaInicio = getVal('fecha_inicio') ?? getVal('fecha inicio') ?? getVal('fecha_creacion') ?? (row.length === 18 ? String(row[9] || '') : '');
+  const tramite = getVal('tramite') ?? (row.length === 18 ? String(row[10] || '') : (row.length === 17 ? String(row[9] || '') : String(row[8] || '')));
+  const detenido = getVal('detenido') ?? (row.length === 18 ? String(row[11] || '') : (row.length === 17 ? String(row[10] || '') : String(row[9] || '')));
+
+  const vencimientoPP1 = getVal('vencimiento_pp1') ?? getVal('vencimiento pp1') ?? getVal('vencimiento_pp') ?? (row.length === 18 ? String(row[12] || '') : (row.length === 17 ? String(row[11] || '') : String(row[10] || '')));
+  const vencimientoPP2 = getVal('vencimiento_pp2') ?? getVal('vencimiento pp2') ?? (row.length === 18 ? String(row[13] || '') : (row.length === 17 ? String(row[12] || '') : String(row[11] || '')));
+  const vencimientoIPP = getVal('vencimiento_ipp') ?? getVal('venc_ipp') ?? getVal('vencimiento ipp') ?? getVal('venc. ipp') ?? (row.length === 18 ? String(row[14] || '') : (row.length === 17 ? String(row[13] || '') : String(row[12] || '')));
+  const ppProrrogadaVal = getVal('pp_prorrogada') ?? getVal('pp prorrogada') ?? (row.length === 18 ? String(row[15] || '') : (row.length === 17 ? String(row[14] || '') : String(row[13] || '')));
+  const periciasVal = getVal('pericias') ?? (row.length === 18 ? String(row[16] || '') : (row.length === 17 ? String(row[15] || '') : String(row[14] || '')));
+  const audienciasVal = getVal('audiencias') ?? (row.length === 18 ? String(row[17] || '') : (row.length === 17 ? String(row[16] || '') : String(row[15] || '')));
+
   let pericias = [];
   try {
-    pericias = row[15] ? JSON.parse(row[15]) : [];
+    pericias = periciasVal ? JSON.parse(periciasVal) : [];
   } catch (e) {
     pericias = [];
   }
+
+  let audiencias = [];
+  try {
+    audiencias = audienciasVal ? JSON.parse(audienciasVal) : [];
+  } catch (e) {
+    audiencias = [];
+  }
+
   return {
-    id: String(row[0] || ''),
-    ipp: String(row[1] || ''),
-    estado: String(row[2] || ''),
-    revisado: String(row[3] || ''),
-    revisar_dias: String(row[4] || ''),
-    caratula: String(row[5] || ''),
-    sumario: String(row[6] || ''),
-    tramite: String(row[7] || ''),
-    detenido: String(row[8] || ''),
-    vencimiento_fecha: String(row[9] || ''),
-    vencimiento_pp: String(row[10] || ''),
-    vencimiento_ipp: String(row[11] || ''),
-    vencimiento_pp1: String(row[12] || ''),
-    vencimiento_pp2: String(row[13] || ''),
-    pp_prorrogada: String(row[14]).toLowerCase() === 'true' || row[14] === true,
-    pericias: pericias
+    id: getVal('id') ?? String(row[0] || ''),
+    ipp: getVal('ipp') ?? String(row[1] || ''),
+    estado: estadoVal,
+    revision: revisionVal || (estadoVal.toLowerCase() === 'en trámite' || estadoVal.toLowerCase() === 'en tramite' ? 'Esperar' : '-'),
+    revisado: revisado,
+    revisar_dias: revisarDias,
+    caratula: caratula,
+    sumario: sumario,
+    denunciado_en: denunciadoEn,
+    fecha_inicio: fechaInicio || revisado || '',
+    tramite: tramite,
+    detenido: detenido,
+    vencimiento_pp1: vencimientoPP1,
+    vencimiento_pp2: vencimientoPP2,
+    vencimiento_ipp: vencimientoIPP,
+    pp_prorrogada: String(ppProrrogadaVal).toLowerCase() === 'true' || ppProrrogadaVal === true || String(ppProrrogadaVal).toUpperCase() === 'SI',
+    pericias: pericias,
+    audiencias: audiencias
   };
 }
 
 function causaToRow(c) {
+  let cleanEstado = (c.estado || 'En Trámite').trim();
+  let cleanRevision = (c.revision || '').trim();
+
+  if (cleanEstado.toLowerCase() === 'esperar' || cleanEstado.toLowerCase() === 'revisar') {
+    if (!cleanRevision) cleanRevision = cleanEstado;
+    cleanEstado = 'En Trámite';
+  }
+
+  if (!cleanRevision) {
+    cleanRevision = (cleanEstado.toLowerCase() === 'en trámite' || cleanEstado.toLowerCase() === 'en tramite') ? 'Esperar' : '-';
+  }
+
+  const fechaInicio = c.fecha_inicio || c.fecha_creacion || c.revisado || '';
+
   return [
     c.id || '',
     c.ipp || '',
-    c.estado || '',
+    cleanEstado,
+    cleanRevision,
     c.revisado || '',
     c.revisar_dias || '',
     c.caratula || '',
     c.sumario || '',
+    c.denunciado_en || '',
+    fechaInicio,
     c.tramite || '',
     c.detenido || '',
-    c.vencimiento_fecha || '',
-    c.vencimiento_pp || '',
-    c.vencimiento_ipp || '',
     c.vencimiento_pp1 || '',
     c.vencimiento_pp2 || '',
+    c.vencimiento_ipp || '',
     c.pp_prorrogada ? 'true' : 'false',
-    JSON.stringify(c.pericias || [])
+    JSON.stringify(c.pericias || []),
+    JSON.stringify(c.audiencias || [])
   ];
 }
 
@@ -202,6 +489,16 @@ function readCausasForUser(userName) {
   if (data.length <= 1) {
     return jsonResponse({ status: 'success', causas: [] });
   }
+
+  const headersMap = {};
+  if (data.length > 0) {
+    const hRow = data[0];
+    for (let h = 0; h < hRow.length; h++) {
+      const colName = String(hRow[h] || '').trim().toLowerCase();
+      if (colName) headersMap[colName] = h;
+    }
+  }
+
   const causas = [];
   for (let i = 1; i < data.length; i++) {
     const idVal = String(data[i][0] || '').trim().toLowerCase();
@@ -209,7 +506,7 @@ function readCausasForUser(userName) {
     if (idVal === 'id' && ippVal === 'ipp') continue;
 
     if (data[i][0] || data[i][1]) {
-      causas.push(rowToCausa(data[i]));
+      causas.push(rowToCausa(data[i], headersMap));
     }
   }
   return jsonResponse({ status: 'success', causas: causas });
@@ -241,14 +538,7 @@ function doPost(e) {
 
     if (action === 'sync') {
       const causasList = contents.causas || [];
-      const lastRow = sheet.getLastRow();
-      if (lastRow > 1) {
-        sheet.getRange(2, 1, lastRow - 1, HEADERS.length).clearContent();
-      }
-      if (causasList.length > 0) {
-        const rows = causasList.map(causaToRow);
-        sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
-      }
+      syncAllCausasForUser(sheet, causasList);
       return jsonResponse({ status: 'success', message: 'Sincronización completa exitosa', count: causasList.length });
     }
 
@@ -317,16 +607,24 @@ function doPost(e) {
 
     if (action === 'get_users') {
       const uSheet = getOrCreateUsersSheet();
+      deduplicateUsersSheet(uSheet);
       const uData = uSheet.getDataRange().getValues();
       const userList = [];
+      const seen = {};
       for (let i = 1; i < uData.length; i++) {
-        if (uData[i][0] || uData[i][1]) {
+        const id = String(uData[i][0] || '').trim();
+        const name = String(uData[i][1] || '').trim();
+        const email = String(uData[i][2] || '').trim().toLowerCase();
+        const key = email || name || id;
+
+        if (key && !seen[key]) {
+          seen[key] = true;
           userList.push({
-            id: String(uData[i][0]),
-            name: String(uData[i][1]),
-            email: String(uData[i][2]),
-            password: String(uData[i][3]),
-            role: String(uData[i][4])
+            id: id || ('u-' + Date.now()),
+            name: name,
+            email: email,
+            password: String(uData[i][3] || ''),
+            role: String(uData[i][4] || 'Instructor Judicial')
           });
         }
       }
@@ -601,7 +899,17 @@ export async function fetchUsersFromSheetsTab(url) {
   if (!url) return [];
   try {
     const result = await postToAppsScript(url, { action: 'get_users' });
-    return result.users || [];
+    const rawUsers = result.users || [];
+    const uniqueUsers = [];
+    const seen = new Set();
+    for (const u of rawUsers) {
+      const key = (u.email || u.name || u.id || '').trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        uniqueUsers.push(u);
+      }
+    }
+    return uniqueUsers;
   } catch (err) {
     console.warn('Error al obtener usuarios desde Google Sheets:', err.message);
     return [];

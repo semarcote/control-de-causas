@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import initialCausasData from './data/causas.json';
 import Header from './components/Header';
 import StatsOverview from './components/StatsOverview';
 import FilterBar from './components/FilterBar';
@@ -9,6 +8,7 @@ import NewCausaModal from './components/NewCausaModal';
 import LoginScreen from './components/LoginScreen';
 import UserManagementModal from './components/UserManagementModal';
 import ExpirationPanel, { getDaysRemaining } from './components/ExpirationPanel';
+import AudienciasPanel from './components/AudienciasPanel';
 import {
   getStoredSheetsUrl,
   fetchCausasFromSheets,
@@ -22,7 +22,7 @@ import {
   deleteUserFromSheetsTab
 } from './services/googleSheetsService';
 
-import { isFinalizedState, causaHasSumario } from './components/CausasTable';
+import { isFinalizedState, causaHasSumario, getCausaIngresoDate, parseAnyDate, isCausaRevisar, isCausaEsperar } from './components/CausasTable';
 
 const STORAGE_KEY = 'control_causas_ufi10_v12';
 const USERS_STORAGE_KEY = 'control_causas_ufi10_users_v2';
@@ -31,7 +31,7 @@ const SESSION_STORAGE_KEY = 'control_causas_ufi10_session_v2';
 const ADMIN_USER = {
   id: 'u-admin-marcote',
   name: 'SEBASTIÁN MARCOTE',
-  email: 'admin@ufi10.gob.ar',
+  email: 'admin@mpba.gov.ar',
   password: 'admin',
   role: 'Administrador General'
 };
@@ -55,23 +55,60 @@ function parseIPP(ippStr) {
 
 function getUserStorageKey(user) {
   if (!user) return STORAGE_KEY;
-  return `${STORAGE_KEY}_user_${user.id || user.name.replace(/\s+/g, '_')}`;
+  const identifier = String(user.name || user.id || 'user').trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+  return `${STORAGE_KEY}_user_${identifier}`;
+}
+
+function mergeCausas(localList = [], remoteList = []) {
+  if (!Array.isArray(remoteList) || remoteList.length === 0) return localList;
+  if (!Array.isArray(localList) || localList.length === 0) return remoteList;
+
+  const map = new Map();
+  remoteList.forEach(r => {
+    if (r && (r.id || r.ipp)) {
+      const key = String(r.id || r.ipp).trim().toLowerCase();
+      map.set(key, r);
+    }
+  });
+
+  localList.forEach(l => {
+    if (l && (l.id || l.ipp)) {
+      const key = String(l.id || l.ipp).trim().toLowerCase();
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, l);
+      } else {
+        const localTramiteLen = (l.tramite || '').length;
+        const remoteTramiteLen = (existing.tramite || '').length;
+        const mergedTramite = localTramiteLen >= remoteTramiteLen ? l.tramite : existing.tramite;
+        
+        map.set(key, {
+          ...existing,
+          ...l,
+          tramite: mergedTramite,
+          estado: l.estado || existing.estado,
+          vencimiento_ipp: l.vencimiento_ipp || existing.vencimiento_ipp,
+          vencimiento_pp1: l.vencimiento_pp1 || existing.vencimiento_pp1,
+          vencimiento_pp2: l.vencimiento_pp2 || existing.vencimiento_pp2,
+          audiencias: Array.isArray(l.audiencias) && l.audiencias.length > 0 ? l.audiencias : existing.audiencias,
+          pericias: Array.isArray(l.pericias) && l.pericias.length > 0 ? l.pericias : existing.pericias
+        });
+      }
+    }
+  });
+
+  return Array.from(map.values());
 }
 
 export default function App() {
-  // Users state (Ensures Administrator Sebastián Marcote is the sole Admin)
+  // Users state (Preserves customized credentials from localStorage or Google Sheets)
   const [users, setUsers] = useState(() => {
     const saved = localStorage.getItem(USERS_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Remove old "Auxiliar Letrado" Marcote account if present
-          const cleaned = parsed.filter(u => !(u.role === 'Aux. Bar Letrado' || u.role === 'Auxiliar Letrado' || (u.name.toLowerCase().includes('marcote') && u.role !== 'Administrador General')));
-          if (!cleaned.some(u => u.id === ADMIN_USER.id || u.role === 'Administrador General')) {
-            cleaned.unshift(ADMIN_USER);
-          }
-          return cleaned;
+          return parsed;
         }
       } catch (e) {}
     }
@@ -82,16 +119,13 @@ export default function App() {
     localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
   }, [users]);
 
-  // Session state (Defaults to Administrator General Sebastián Marcote)
+  // Session state (Defaults to Administrator General or saved custom session)
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem(SESSION_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && (parsed.role === 'Administrador General' || parsed.id === ADMIN_USER.id)) {
-          return ADMIN_USER;
-        }
-        return parsed;
+        if (parsed) return parsed;
       } catch (e) {}
     }
     return ADMIN_USER;
@@ -107,17 +141,38 @@ export default function App() {
     localStorage.removeItem(SESSION_STORAGE_KEY);
   };
 
-  // Synchronize Admin user and registered users from Google Sheets USUARIOS tab on app load
+  // Synchronize registered users from Google Sheets USUARIOS tab on app load
   useEffect(() => {
     const url = getStoredSheetsUrl();
     if (url) {
-      // Always save Admin user to USUARIOS sheet tab
-      saveUserToSheetsTab(url, ADMIN_USER).catch(e => console.error('Error syncing admin user:', e));
-
       // Fetch registered users from Google Sheets USUARIOS tab
       fetchUsersFromSheetsTab(url).then(remoteUsers => {
         if (Array.isArray(remoteUsers) && remoteUsers.length > 0) {
-          setUsers(remoteUsers);
+          setUsers(prevLocalUsers => {
+            const mergedUsers = remoteUsers.map(r => {
+              const localMatch = prevLocalUsers.find(l => l.id === r.id || l.name?.toUpperCase() === r.name?.toUpperCase());
+              if (localMatch && localMatch.password && localMatch.password !== 'admin' && (r.password === 'admin' || !r.password)) {
+                return { ...r, password: localMatch.password };
+              }
+              return r;
+            });
+            localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(mergedUsers));
+            return mergedUsers;
+          });
+
+          // Sync active session if user credentials were updated in Google Sheets
+          setCurrentUser(prev => {
+            if (!prev) return prev;
+            const matchingRemote = remoteUsers.find(u => u.id === prev.id || u.email?.toLowerCase() === prev.email?.toLowerCase() || u.name?.toUpperCase() === prev.name?.toUpperCase());
+            if (matchingRemote) {
+              const updatedSession = (prev.password && prev.password !== 'admin' && matchingRemote.password === 'admin')
+                ? { ...matchingRemote, password: prev.password }
+                : matchingRemote;
+              localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedSession));
+              return updatedSession;
+            }
+            return prev;
+          });
         }
       }).catch(e => console.error('Error fetching users from USUARIOS tab:', e));
     }
@@ -128,7 +183,11 @@ export default function App() {
       ...newUser,
       name: newUser.name.trim().toUpperCase()
     };
-    setUsers(prev => [...prev, formattedUser]);
+    setUsers(prev => {
+      const nextUsers = [...prev, formattedUser];
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(nextUsers));
+      return nextUsers;
+    });
 
     // Save user to USUARIOS sheet tab and generate individual sheet tab in Google Sheets
     const sheetsUrl = getStoredSheetsUrl();
@@ -143,7 +202,11 @@ export default function App() {
       ...updatedUser,
       name: updatedUser.name.trim().toUpperCase()
     };
-    setUsers(prev => prev.map(u => u.id === formattedUser.id ? formattedUser : u));
+    setUsers(prev => {
+      const nextUsers = prev.map(u => u.id === formattedUser.id ? formattedUser : u);
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(nextUsers));
+      return nextUsers;
+    });
 
     // Update user in USUARIOS sheet tab in Google Sheets
     const sheetsUrl = getStoredSheetsUrl();
@@ -152,7 +215,7 @@ export default function App() {
     }
 
     // If updating the currently logged-in user (e.g. Administrator Marcote), update active session
-    if (currentUser && currentUser.id === formattedUser.id) {
+    if (currentUser && (currentUser.id === formattedUser.id || currentUser.name.toUpperCase() === formattedUser.name.toUpperCase())) {
       setCurrentUser(formattedUser);
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(formattedUser));
     }
@@ -174,53 +237,53 @@ export default function App() {
 
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
 
-  // Load initial dataset from user-scoped localStorage or default for Admin / empty for others
+  // Load dataset strictly from active user's key
   const [causas, setCausas] = useState(() => {
     const key = getUserStorageKey(currentUser);
     const saved = localStorage.getItem(key);
     if (saved) {
       try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error loading saved causas, loading default', e);
-      }
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
     }
-    const isAdmin = currentUser?.role === 'Administrador General' || currentUser?.name?.toLowerCase().includes('marcote');
-    return isAdmin ? initialCausasData : [];
+    return [];
   });
 
-  // Re-load dataset and fetch Google Sheets data whenever currentUser changes
+  // Re-load dataset and fetch Google Sheets data strictly for current active user (Google Sheets is Single Source of Truth)
   useEffect(() => {
     if (!currentUser) return;
 
     const key = getUserStorageKey(currentUser);
     const saved = localStorage.getItem(key);
-    const isAdmin = currentUser?.role === 'Administrador General' || currentUser?.name?.toLowerCase().includes('marcote');
-
     if (saved) {
       try {
-        setCausas(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setCausas(parsed);
+        }
       } catch (e) {
-        setCausas(isAdmin ? initialCausasData : []);
+        setCausas([]);
       }
     } else {
-      setCausas(isAdmin ? initialCausasData : []);
+      setCausas([]);
     }
 
-    // Background fetch from Google Sheets for the active user's tab
+    // Fetch live dataset from active user's individual Google Sheets tab (Single Source of Truth)
     const url = getStoredSheetsUrl();
     if (url) {
       fetchCausasFromSheets(url, currentUser.name)
         .then((remoteCausas) => {
           if (Array.isArray(remoteCausas)) {
             setCausas(remoteCausas);
+            localStorage.setItem(key, JSON.stringify(remoteCausas));
           }
         })
         .catch((err) => {
-          console.warn('Google Sheets background fetch notice:', err);
+          console.warn('Google Sheets fetch notice:', err);
         });
     }
-  }, [currentUser]);
+  }, [currentUser?.id, currentUser?.name]);
 
   // Save to user-scoped localStorage on change
   useEffect(() => {
@@ -234,6 +297,7 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState('en trámite'); // Default to 'en trámite'
   const [sumarioFilter, setSumarioFilter] = useState('todos'); // 'todos' | 'con_sumario' | 'sin_sumario'
   const [inicioFilter, setInicioFilter] = useState('todos'); // 'todos' | INICIO_OPTIONS
+  const [fechaDesdeFilter, setFechaDesdeFilter] = useState(''); // DD/MM/YY filter
   const [sortBy, setSortBy] = useState('ipp-asc'); // 'ipp-asc' | 'ipp-desc' | 'revisar-asc' | 'revisado-desc'
 
   // Modals State
@@ -266,7 +330,11 @@ export default function App() {
         const stLower = (causa.estado || '').toLowerCase().trim();
         const sfLower = statusFilter.toLowerCase().trim();
 
-        if (sfLower === 'en trámite' || sfLower === 'en tramite') {
+        if (sfLower === 'revisar' || sfLower === 'para revisar' || sfLower.includes('revisar')) {
+          if (!isCausaRevisar(causa)) return false;
+        } else if (sfLower === 'esperar' || sfLower === 'en espera' || sfLower.includes('espera')) {
+          if (!isCausaEsperar(causa)) return false;
+        } else if (sfLower === 'en trámite' || sfLower === 'en tramite') {
           // If estado is set to ANY resolution or special state, exclude it from En Trámite!
           const isResolved = isFinalizedState(causa.estado, causa.tramite);
           if (isResolved) return false;
@@ -302,6 +370,18 @@ export default function App() {
         if (causaInit !== initTarget && !initTarget.includes(causaInit) && !causaInit.includes(initTarget)) return false;
       }
 
+      // 5. Entry Date Filter (Causas ingresadas a partir de una fecha determinada)
+      if (fechaDesdeFilter && fechaDesdeFilter.trim().length >= 8) {
+        const startDate = parseAnyDate(fechaDesdeFilter);
+        if (startDate) {
+          startDate.setHours(0, 0, 0, 0);
+          const ingresoDate = getCausaIngresoDate(causa);
+          if (!ingresoDate) return false;
+          ingresoDate.setHours(0, 0, 0, 0);
+          if (ingresoDate.getTime() < startDate.getTime()) return false;
+        }
+      }
+
       return true;
     }).sort((a, b) => {
       if (sortBy === 'ipp-asc') {
@@ -330,16 +410,17 @@ export default function App() {
 
   // Handlers
   const handleSaveCausa = (updatedCausa) => {
-    setCausas(prev => prev.map(c => c.id === updatedCausa.id ? updatedCausa : c));
-    
-    // Only update selectedCausa if modal is already open
-    if (selectedCausa && selectedCausa.id === updatedCausa.id) {
-      setSelectedCausa(updatedCausa);
-    }
+    if (!updatedCausa) return;
+    let nextList = [];
+    setCausas(prev => {
+      nextList = prev.map(c => (c.id === updatedCausa.id || (c.ipp && c.ipp === updatedCausa.ipp)) ? updatedCausa : c);
+      return nextList;
+    });
 
     const sheetsUrl = getStoredSheetsUrl();
     if (sheetsUrl) {
       updateCausaInSheets(sheetsUrl, updatedCausa, currentUser?.name).catch(e => console.error('Background sync save error:', e));
+      syncAllToSheets(sheetsUrl, nextList, currentUser?.name).catch(e => console.error('Background sync full error:', e));
     }
   };
 
@@ -407,6 +488,7 @@ export default function App() {
     setStatusFilter('en trámite');
     setSumarioFilter('todos');
     setInicioFilter('todos');
+    setFechaDesdeFilter('');
   };
 
   const [activePage, setActivePage] = useState('causas'); // 'causas' | 'vencimientos' | 'usuarios'
@@ -427,6 +509,16 @@ export default function App() {
       })) {
         count++;
       }
+    });
+    return count;
+  }, [causas]);
+
+  // Count upcoming/pending audiencias
+  const audienciasCount = useMemo(() => {
+    let count = 0;
+    causas.forEach(c => {
+      const auds = Array.isArray(c.audiencias) ? c.audiencias : [];
+      count += auds.filter(a => a.estado !== 'Realizada' && a.estado !== 'Suspendida').length;
     });
     return count;
   }, [causas]);
@@ -452,6 +544,7 @@ export default function App() {
         totalCausas={causas.length}
         aRevisarCount={aRevisarCount}
         urgentVencimientosCount={urgentVencimientosCount}
+        audienciasCount={audienciasCount}
         currentUser={currentUser}
         activePage={activePage}
         onPageChange={setActivePage}
@@ -482,6 +575,8 @@ export default function App() {
               onSumarioFilterChange={setSumarioFilter}
               inicioFilter={inicioFilter}
               onInicioFilterChange={setInicioFilter}
+              fechaDesdeFilter={fechaDesdeFilter}
+              onFechaDesdeFilterChange={setFechaDesdeFilter}
               sortBy={sortBy}
               onSortByChange={setSortBy}
               totalResults={filteredCausas.length}
@@ -507,7 +602,16 @@ export default function App() {
           />
         )}
 
-        {/* PAGE 3: GESTIÓN DE USUARIOS (Solo Administrador General) */}
+        {/* PAGE 3: CALENDARIO DE AUDIENCIAS */}
+        {activePage === 'audiencias' && (
+          <AudienciasPanel
+            causas={causas}
+            onSelectCausa={(causa) => setSelectedCausa(causa)}
+            onSaveCausa={handleSaveCausa}
+          />
+        )}
+
+        {/* PAGE 4: GESTIÓN DE USUARIOS (Solo Administrador General) */}
         {activePage === 'usuarios' && (currentUser?.role === 'Administrador General' || currentUser?.name?.toLowerCase().includes('marcote')) && (
           <UserManagementModal
             users={users}
@@ -522,13 +626,14 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-slate-950/60 py-4 text-center text-xs text-slate-500">
-        UFI N° 10 - Sistema de Control y Seguimiento Procesal de Causas • {causas.length} expedientes registrados
+        Ministerio Público Fiscal - Sistema de Control y Seguimiento Procesal de Causas • {causas.length} expedientes registrados
       </footer>
 
       {/* Modal Detail / Timeline / Edit */}
       {selectedCausa && (
         <CausaModal
           causa={selectedCausa}
+          causas={causas}
           onClose={() => setSelectedCausa(null)}
           onSave={handleSaveCausa}
         />

@@ -1,13 +1,20 @@
-import React, { useState } from 'react';
-import { X, Clock, FileText, Calendar, Edit3, Plus, Shield, MapPin, Gavel, CheckCircle2, AlertTriangle, Send, RotateCcw, Trash2, Unlock, UserCheck } from 'lucide-react';
-import { renderBadgeEstado, isFinalizedState, isAbusoSexual, renderBadgePericia, renderMultiplePericiasBadges, renderBadgePP, calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, extractAndFormatDateFromActuacion, isDateInFuture, isValidDateString, INICIO_OPTIONS, formatDisplayDate } from './CausasTable';
+import React, { useState, useMemo } from 'react';
+import { X, Clock, FileText, Calendar, Edit3, Plus, Shield, MapPin, Gavel, CheckCircle2, AlertTriangle, Send, RotateCcw, Trash2, Unlock, UserCheck, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
+import { renderBadgeEstado, isFinalizedState, isAbusoSexual, renderBadgePericia, renderMultiplePericiasBadges, renderBadgePP, calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, extractAndFormatDateFromActuacion, isDateInFuture, isValidDateString, INICIO_OPTIONS, formatDisplayDate, parseAnyDate, isPPMaxDaysExceeded } from './CausasTable';
 
-export default function CausaModal({ causa, onClose, onSave }) {
+const monthNames = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+export default function CausaModal({ causa, causas = [], onClose, onSave }) {
   if (!causa) return null;
 
   const [activeTab, setActiveTab] = useState('timeline'); // 'timeline' | 'edit' | 'add'
   const [formData, setFormData] = useState({ ...causa });
+  const todayDefaultStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const [newActuacion, setNewActuacion] = useState('');
+  const [newActuacionFecha, setNewActuacionFecha] = useState(todayDefaultStr);
   const [newPlazoDias, setNewPlazoDias] = useState(causa.revisar_dias || '30');
   const [nuevoEstado, setNuevoEstado] = useState(() => {
     const st = (causa.estado || '').trim().toLowerCase();
@@ -17,13 +24,16 @@ export default function CausaModal({ causa, onClose, onSave }) {
     return causa.estado;
   });
   const [detenidoState, setDetenidoState] = useState(causa.detenido || 'NO');
+  const [sumarioState, setSumarioState] = useState(() => (causa.sumario && causa.sumario.trim() !== '' && causa.sumario.trim().toLowerCase() !== 'no') ? 'SÍ' : 'NO');
   const [flagranciaState, setFlagranciaState] = useState(causa.flagrancia || 'NO');
-  const [fechaFlagranciaState, setFechaFlagranciaState] = useState(causa.fecha_flagrancia || '');
+  const [fechaFlagranciaState, setFechaFlagranciaState] = useState(formatDisplayDate(causa.fecha_flagrancia) || '');
   const [flagranciaProrrogadaState, setFlagranciaProrrogadaState] = useState(causa.flagrancia_prorrogada === true || causa.flagrancia_prorrogada === 'SI');
-  const [fechaDetencionState, setFechaDetencionState] = useState(causa.fecha_detencion || '');
-  const [vencPP1State, setVencPP1State] = useState(causa.vencimiento_pp1 || causa.vencimiento_pp || causa.estado_pp || '');
+  const [fechaDetencionState, setFechaDetencionState] = useState(formatDisplayDate(causa.fecha_detencion) || '');
+  const rawPP1 = causa.vencimiento_pp1 || causa.vencimiento_pp || causa.estado_pp || '';
+  const initialSpecialPP = checkPPStatusSpecial(rawPP1);
+  const [vencPP1State, setVencPP1State] = useState(initialSpecialPP || formatDisplayDate(rawPP1) || '');
   const [ppProrrogadaState, setPpProrrogadaState] = useState(causa.pp_prorrogada === true || causa.pp_prorrogada === 'SI');
-  const [vencIPPState, setVencIPPState] = useState(causa.vencimiento_ipp || '');
+  const [vencIPPState, setVencIPPState] = useState(checkPPStatusSpecial(causa.vencimiento_ipp) ? '' : (formatDisplayDate(causa.vencimiento_ipp) || ''));
   const [changeEstadoNote, setChangeEstadoNote] = useState('');
   const [customInicio, setCustomInicio] = useState(
     causa.denunciado_en && !INICIO_OPTIONS.includes(causa.denunciado_en) ? causa.denunciado_en : ''
@@ -43,6 +53,122 @@ export default function CausaModal({ causa, onClose, onSave }) {
   const [editingPericiaTipo, setEditingPericiaTipo] = useState('');
   const [editingPericiaFecha, setEditingPericiaFecha] = useState('');
 
+  // Audiencias State
+  const [audienciasState, setAudienciasState] = useState(
+    Array.isArray(causa.audiencias) ? [...causa.audiencias] : []
+  );
+  const [newAudTipo, setNewAudTipo] = useState('Declaración Art. 308');
+  const [newAudFecha, setNewAudFecha] = useState(todayDefaultStr);
+  const [newAudHora, setNewAudHora] = useState('10:00');
+  const [newAudLugar, setNewAudLugar] = useState('Sede UFI');
+  const [newAudModalidad, setNewAudModalidad] = useState('Presencial');
+  const [newAudObs, setNewAudObs] = useState('');
+
+  // Interactive Calendar Picker State inside CausaModal
+  const [pickerMonth, setPickerMonth] = useState(new Date());
+  const [pickerSelectedDate, setPickerSelectedDate] = useState(new Date());
+  const [audStep, setAudStep] = useState('picker'); // 'picker' | 'details'
+
+  // Map all system-wide audiencias by YYYY-MM-DD
+  const systemAudienciasMap = useMemo(() => {
+    const map = {};
+    causas.forEach(c => {
+      const auds = Array.isArray(c.audiencias) ? c.audiencias : [];
+      auds.forEach(aud => {
+        const dt = parseAnyDate(aud.fecha);
+        if (dt) {
+          const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+          if (!map[key]) map[key] = [];
+          map[key].push({ ...aud, causa: c });
+        }
+      });
+    });
+    return map;
+  }, [causas]);
+
+  // Calendar Grid Days Calculation for Picker
+  const pickerGrid = useMemo(() => {
+    const year = pickerMonth.getFullYear();
+    const month = pickerMonth.getMonth();
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    let startDay = firstDay.getDay() - 1;
+    if (startDay === -1) startDay = 6;
+
+    const totalDays = lastDay.getDate();
+    const days = [];
+
+    const prevMonthLast = new Date(year, month, 0).getDate();
+    for (let i = startDay - 1; i >= 0; i--) {
+      days.push({ date: new Date(year, month - 1, prevMonthLast - i), isCurrentMonth: false });
+    }
+    for (let d = 1; d <= totalDays; d++) {
+      days.push({ date: new Date(year, month, d), isCurrentMonth: true });
+    }
+    const remaining = (42 - days.length) % 7;
+    for (let n = 1; n <= remaining; n++) {
+      days.push({ date: new Date(year, month + 1, n), isCurrentMonth: false });
+    }
+    return days;
+  }, [pickerMonth]);
+
+  const handleAddAudienciaItem = (e) => {
+    e.preventDefault();
+    if (!newAudFecha.trim()) return;
+
+    const newItem = {
+      id: `aud-${Date.now()}`,
+      tipo: newAudTipo || 'Declaración Art. 308',
+      fecha: newAudFecha,
+      hora: newAudHora || '10:00',
+      lugar: newAudLugar || 'Sede UFI',
+      modalidad: newAudModalidad || 'Presencial',
+      estado: 'Programada',
+      observaciones: newAudObs || ''
+    };
+
+    const updated = [...audienciasState, newItem];
+    setAudienciasState(updated);
+
+    // Auto-generate movement timeline entry
+    const entryText = `Audiencia fijada: ${newItem.tipo} (${formatDisplayDate(newItem.fecha)} ${newItem.hora} hs - ${newItem.lugar})`;
+    const fullEntry = `${formatDisplayDate(newItem.fecha)} ${entryText}`;
+    let newTramite = causa.tramite || '';
+    if (newTramite.trim()) {
+      newTramite = `${newTramite} /// ${fullEntry}`;
+    } else {
+      newTramite = fullEntry;
+    }
+
+    onSave({
+      ...causa,
+      audiencias: updated,
+      tramite: newTramite
+    });
+
+    setNewAudObs('');
+  };
+
+  const handleToggleAudienciaEstado = (audId, newEstado) => {
+    const updated = audienciasState.map(a => a.id === audId ? { ...a, estado: newEstado } : a);
+    setAudienciasState(updated);
+    onSave({
+      ...causa,
+      audiencias: updated
+    });
+  };
+
+  const handleDeleteAudienciaItem = (audId) => {
+    const updated = audienciasState.filter(a => a.id !== audId);
+    setAudienciasState(updated);
+    onSave({
+      ...causa,
+      audiencias: updated
+    });
+  };
+
   // Parse timeline items from `tramite` string using /// as delimiter
   const rawTimeline = causa.tramite
     ? causa.tramite.split('///').map(item => item.trim()).filter(Boolean)
@@ -60,6 +186,11 @@ export default function CausaModal({ causa, onClose, onSave }) {
   const handleAddPericiaItem = (e) => {
     e.preventDefault();
     if (!newPericiaTipo.trim() && !newPericiaFecha.trim()) return;
+
+    if (newPericiaFecha.trim() && isDateInPast(newPericiaFecha.trim())) {
+      alert(`La fecha de la pericia (${newPericiaFecha.trim()}) es errónea: No puede ser una fecha anterior a la fecha del día de hoy.`);
+      return;
+    }
 
     const tipoText = newPericiaTipo.trim() || 'Pericia Procesal';
     const fechaText = newPericiaFecha.trim() || 'Sin fecha';
@@ -94,6 +225,53 @@ export default function CausaModal({ causa, onClose, onSave }) {
 
     setNewPericiaTipo('');
     setNewPericiaFecha('');
+  };
+
+  const handleSavePericiasAndClose = () => {
+    let finalPericias = [...periciasState];
+    let updatedTramite = causa.tramite || '';
+
+    // If there is an un-added pericia being typed in the fields, auto-process it
+    if (newPericiaTipo.trim() || newPericiaFecha.trim()) {
+      if (newPericiaFecha.trim() && isDateInPast(newPericiaFecha.trim())) {
+        alert(`La fecha de la pericia (${newPericiaFecha.trim()}) es errónea: No puede ser una fecha anterior a la fecha del día de hoy.`);
+        return;
+      }
+
+      const tipoText = newPericiaTipo.trim() || 'Pericia Procesal';
+      const fechaText = newPericiaFecha.trim() || 'Sin fecha';
+
+      const newItem = {
+        id: `p-${Date.now()}`,
+        tipo: tipoText,
+        fecha: fechaText
+      };
+
+      finalPericias.push(newItem);
+
+      const todayStrShort = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+      const periciaEntry = `${todayStrShort} Registro de Pericia procesal: ${tipoText} (Fecha fijada: ${fechaText})`;
+      updatedTramite = updatedTramite ? `${updatedTramite} /// ${periciaEntry}` : periciaEntry;
+    }
+
+    const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const updatedCausa = {
+      ...formData,
+      tramite: updatedTramite,
+      pericias: finalPericias,
+      revisado: todayStr
+    };
+
+    try {
+      setFormData(updatedCausa);
+      if (onSave) onSave(updatedCausa);
+    } catch (err) {
+      console.error('Error saving pericias:', err);
+    } finally {
+      setNewPericiaTipo('');
+      setNewPericiaFecha('');
+      if (onClose) onClose();
+    }
   };
 
   const handleToggleFinalizarPericia = (idToToggle) => {
@@ -142,6 +320,11 @@ export default function CausaModal({ causa, onClose, onSave }) {
   };
 
   const handleSaveEditPericia = (idToEdit) => {
+    if (editingPericiaFecha.trim() && isDateInPast(editingPericiaFecha.trim())) {
+      alert(`La fecha de la pericia (${editingPericiaFecha.trim()}) es errónea: No puede ser una fecha anterior a la fecha del día de hoy.`);
+      return;
+    }
+
     const updatedPericias = periciasState.map(p => {
       if (p.id === idToEdit) {
         return {
@@ -221,11 +404,12 @@ export default function CausaModal({ causa, onClose, onSave }) {
 
   const handleAddActuacion = (e) => {
     e.preventDefault();
-    const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const fechaReal = formatDisplayDate(newActuacionFecha || todayStr);
 
     let updatedTramite = causa.tramite || '';
     if (newActuacion.trim()) {
-      const formattedEntry = `${todayStr} ${newActuacion.trim()}`;
+      const formattedEntry = `${fechaReal} - ${newActuacion.trim()}`;
       updatedTramite = updatedTramite ? `${updatedTramite} /// ${formattedEntry}` : formattedEntry;
     }
 
@@ -240,17 +424,20 @@ export default function CausaModal({ causa, onClose, onSave }) {
     setFormData(updatedCausa);
     onSave(updatedCausa);
     setNewActuacion('');
-    setActiveTab('timeline');
+    setNewActuacionFecha(todayDefaultStr);
+    if (onClose) onClose();
   };
 
   const handleModificarDatos = (e) => {
-    e.preventDefault();
-    const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     
     const specialStatus = checkPPStatusSpecial(vencPP1State);
+    const finalDetenido = specialStatus === 'Presentada' ? 'SI' : (specialStatus === 'Excarcelado' || specialStatus === 'Libertad' ? 'NO' : detenidoState);
+    const isDetenido = finalDetenido === 'SI';
 
-    // Validate Fecha de Detención (cannot be future or invalid)
-    if (detenidoState === 'SI' && fechaDetencionState) {
+    // Validate Fecha de Detención (ONLY if Detenido = SI)
+    if (isDetenido && fechaDetencionState) {
       if (isDateInFuture(fechaDetencionState)) {
         alert(`La fecha de detención ingresada (${fechaDetencionState}) es errónea: No puede ser una fecha futura posterior al día de hoy.`);
         return;
@@ -262,13 +449,25 @@ export default function CausaModal({ causa, onClose, onSave }) {
       }
     }
 
-    // Validate that PP date is NOT in the past
-    if (!specialStatus && vencPP1State && isDateInPast(vencPP1State)) {
+    // Validate that PP date is NOT in the past (ONLY if Detenido = SI)
+    if (isDetenido && !specialStatus && vencPP1State && isDateInPast(vencPP1State)) {
       alert(`La fecha de vencimiento de la Prisión Preventiva (${vencPP1State}) no puede ser anterior a la fecha de hoy (${todayStr}). Por favor ingrese una fecha futura o seleccione una opción de estado (Presentada / Excarcelado / Libertad).`);
       return;
     }
 
     const calculatedPP2 = (vencPP1State && !specialStatus) ? calculatePP2Date(vencPP1State) : '';
+
+    // Validate that PP date does NOT exceed maximum 30 days limit from detention date (ONLY if Detenido = SI)
+    if (isDetenido && !specialStatus && vencPP1State && fechaDetencionState) {
+      if (isPPMaxDaysExceeded(vencPP1State, fechaDetencionState)) {
+        alert(`La fecha del 1º vencimiento de la Prisión Preventiva (${vencPP1State}) supera el límite máximo legal de 30 días respecto a la fecha de detención.`);
+        return;
+      }
+      if (ppProrrogadaState && calculatedPP2 && isPPMaxDaysExceeded(calculatedPP2, fechaDetencionState)) {
+        alert(`La fecha prorrogada del 2º vencimiento de la Prisión Preventiva (${calculatedPP2}) supera el límite máximo legal de 30 días respecto a la fecha de detención.`);
+        return;
+      }
+    }
 
     const changes = [];
     if (nuevoEstado !== causa.estado) changes.push(`Estado: ${nuevoEstado}`);
@@ -291,44 +490,53 @@ export default function CausaModal({ causa, onClose, onSave }) {
       ? `${causa.tramite} /// ${entryText}`
       : entryText;
 
-    const finalDetenido = specialStatus === 'Presentada' ? 'SI' : (specialStatus === 'Excarcelado' || specialStatus === 'Libertad' ? 'NO' : detenidoState);
-    const isDetenido = finalDetenido === 'SI';
-
     const normInicio = (formData.denunciado_en || '').trim().toLowerCase();
     const autoSumario = normInicio === 'mesa' || normInicio === 'mail' || normInicio === 'ciudadana';
 
     const isFlagrancia = flagranciaState === 'SI' || flagranciaState === 'SÍ';
     const flagranciaCalc = calculateFlagranciaIPPDates(fechaFlagranciaState);
-    let finalVencIPP = vencIPPState;
+    let finalVencIPP = isFlagrancia ? vencIPPState : (flagranciaState === 'NO' ? '' : vencIPPState);
 
-    if (isFlagrancia && fechaFlagranciaState && !flagranciaCalc.error) {
+    // El vencimiento IPP ingresado manualmente siempre tiene prioridad y no se vincula a la prórroga de PP
+    if (flagranciaState === 'NO') {
+      finalVencIPP = '';
+    } else if (!finalVencIPP && isFlagrancia && fechaFlagranciaState && !flagranciaCalc.error) {
       finalVencIPP = flagranciaProrrogadaState ? flagranciaCalc.ipp2 : flagranciaCalc.ipp1;
     }
 
+    const formattedVencPP1 = formatDisplayDate(vencPP1State);
+    const formattedPP2 = formatDisplayDate(calculatedPP2);
+    const formattedVencIPP = formatDisplayDate(finalVencIPP);
+
     const updatedCausa = {
       ...formData,
-      sumario: autoSumario ? (formData.sumario?.trim() || 'SÍ') : formData.sumario,
+      sumario: (sumarioState === 'SÍ' || sumarioState === 'SI') ? (formData.sumario?.trim() && formData.sumario.trim().toLowerCase() !== 'no' && formData.sumario.trim().toLowerCase() !== 'si' && formData.sumario.trim().toLowerCase() !== 'sí' ? formData.sumario : 'SÍ') : 'NO',
       estado: nuevoEstado,
       detenido: finalDetenido,
       flagrancia: flagranciaState,
-      fecha_flagrancia: isFlagrancia ? fechaFlagranciaState : '',
+      fecha_flagrancia: isFlagrancia ? formatDisplayDate(fechaFlagranciaState) : '',
       flagrancia_prorrogada: isFlagrancia ? flagranciaProrrogadaState : false,
-      fecha_detencion: isDetenido ? fechaDetencionState : '',
-      vencimiento_pp1: (isDetenido || specialStatus) ? vencPP1State : '',
-      vencimiento_pp: (isDetenido || specialStatus) ? vencPP1State : '',
-      vencimiento_pp2: (isDetenido && !specialStatus) ? calculatedPP2 : '',
-      estado_pp: specialStatus || (isDetenido ? vencPP1State : ''),
+      fecha_detencion: isDetenido ? formatDisplayDate(fechaDetencionState) : '',
+      vencimiento_pp1: isDetenido ? (specialStatus || formattedVencPP1 || '') : '',
+      vencimiento_pp: isDetenido ? (specialStatus || (ppProrrogadaState ? (formattedPP2 || formattedVencPP1) : formattedVencPP1) || '') : '',
+      vencimiento_pp2: isDetenido ? formattedPP2 : '',
+      estado_pp: isDetenido ? (specialStatus || formattedVencPP1 || '') : '',
       pp_prorrogada: isDetenido ? ppProrrogadaState : false,
-      vencimiento_ipp: finalVencIPP,
+      vencimiento_ipp: (flagranciaState === 'NO' ? '' : ((formattedVencIPP && !checkPPStatusSpecial(formattedVencIPP)) ? formattedVencIPP : '')),
       revisar_dias: newPlazoDias,
       revisado: todayStr,
       tramite: updatedTramite
     };
 
-    setFormData(updatedCausa);
-    onSave(updatedCausa);
-    setChangeEstadoNote('');
-    setActiveTab('timeline');
+    try {
+      setFormData(updatedCausa);
+      if (onSave) onSave(updatedCausa);
+    } catch (err) {
+      console.error('Error in handleModificarDatos save:', err);
+    } finally {
+      setChangeEstadoNote('');
+      if (onClose) onClose();
+    }
   };
 
   const handleReabrir = () => {
@@ -403,52 +611,64 @@ export default function CausaModal({ causa, onClose, onSave }) {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex flex-wrap border-b border-slate-800 bg-slate-900/60 px-5 pt-2">
+        <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto whitespace-nowrap border-b border-slate-800 bg-slate-900/60 px-4 pt-2">
           <button
             onClick={() => setActiveTab('timeline')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 border-b-2 px-2.5 sm:px-3 py-2 text-xs font-medium transition ${
               activeTab === 'timeline'
                 ? 'border-blue-500 text-blue-400 font-bold'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Clock className="h-4 w-4" />
+            <Clock className="h-3.5 w-3.5" />
             Línea de Tiempo ({rawTimeline.length})
           </button>
 
           <button
             onClick={() => setActiveTab('add')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 border-b-2 px-2.5 sm:px-3 py-2 text-xs font-medium transition ${
               activeTab === 'add'
                 ? 'border-blue-500 text-blue-400 font-bold'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Agregar Movimiento
           </button>
 
           <button
             onClick={() => setActiveTab('pericias')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 border-b-2 px-2.5 sm:px-3 py-2 text-xs font-medium transition ${
               activeTab === 'pericias'
                 ? 'border-blue-500 text-blue-400 font-bold'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <FileText className="h-4 w-4 text-purple-400" />
+            <FileText className="h-3.5 w-3.5 text-purple-400" />
             Pericias ({periciasState.length})
           </button>
 
           <button
+            onClick={() => setActiveTab('audiencias')}
+            className={`flex items-center gap-1.5 border-b-2 px-2.5 sm:px-3 py-2 text-xs font-medium transition ${
+              activeTab === 'audiencias'
+                ? 'border-blue-500 text-blue-400 font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Calendar className="h-3.5 w-3.5 text-blue-400" />
+            Audiencias ({audienciasState.length})
+          </button>
+
+          <button
             onClick={() => setActiveTab('edit')}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 border-b-2 px-2.5 sm:px-3 py-2 text-xs font-medium transition ${
               activeTab === 'edit'
                 ? 'border-blue-500 text-blue-400 font-bold'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Edit3 className="h-4 w-4" />
+            <Edit3 className="h-3.5 w-3.5" />
             Modificar Estado Procesal
           </button>
         </div>
@@ -474,7 +694,7 @@ export default function CausaModal({ causa, onClose, onSave }) {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        min="1"
+                        min="0"
                         max="365"
                         value={newPlazoDias}
                         onChange={(e) => {
@@ -527,6 +747,7 @@ export default function CausaModal({ causa, onClose, onSave }) {
                     const isLatest = originalIndex === rawTimeline.length - 1;
                     const isArchivo = item.toLowerCase().includes('archivo');
                     const isEditing = editingActuacionIndex === originalIndex;
+                    const actDate = extractAndFormatDateFromActuacion(item);
 
                     return (
                       <div key={originalIndex} className="relative group">
@@ -542,7 +763,15 @@ export default function CausaModal({ causa, onClose, onSave }) {
                           isLatest ? 'bg-blue-950/20 border-blue-500/30' : 'bg-slate-950/40 border-slate-800/80 hover:border-slate-700'
                         }`}>
                           <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
-                            <span className="font-semibold text-blue-400">Actuación #{originalIndex + 1}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-blue-400">Actuación #{originalIndex + 1}</span>
+                              {actDate && (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-300 border border-amber-500/40" title="Fecha en que fue realizada la actuación">
+                                  <Calendar className="h-3 w-3 text-amber-400" />
+                                  {actDate}
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1.5">
                               {isLatest && (
                                 <span className="rounded bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-300 border border-blue-500/20 mr-1">
@@ -622,6 +851,19 @@ export default function CausaModal({ causa, onClose, onSave }) {
           {/* TAB 2: AGREGAR MOVIMIENTO */}
           {activeTab === 'add' && (
             <form onSubmit={handleAddActuacion} className="space-y-4">
+              <div className="rounded-xl p-3 bg-slate-950 border border-slate-800">
+                <label className="block text-xs font-semibold text-amber-400 mb-1">
+                  📅 Fecha de Realización de la Actuación
+                </label>
+                <input
+                  type="text"
+                  placeholder="DD/MM/AAAA (Ej. 29/08/2026)"
+                  value={newActuacionFecha}
+                  onChange={(e) => setNewActuacionFecha(formatDateMask(e.target.value))}
+                  className="w-full rounded-xl bg-slate-900 p-2.5 text-xs text-white placeholder-slate-500 border border-slate-800 focus:border-amber-500 focus:outline-none font-mono"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Detalle del Nuevo Movimiento / Diligencia Procesal
@@ -634,7 +876,7 @@ export default function CausaModal({ causa, onClose, onSave }) {
                   className="w-full rounded-xl bg-slate-950 p-3 text-xs text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:outline-none uppercase"
                 />
                 <p className="mt-1 text-[11px] text-slate-500">
-                  Se agregará la fecha actual de forma automática al inicio del movimiento.
+                  Se registrará la fecha de realización al inicio de la actuación (dd/mm/aaaa).
                 </p>
               </div>
 
@@ -646,7 +888,7 @@ export default function CausaModal({ causa, onClose, onSave }) {
                   <div className="flex items-center gap-3">
                     <input
                       type="number"
-                      min="1"
+                      min="0"
                       max="365"
                       value={newPlazoDias}
                       onChange={(e) => setNewPlazoDias(e.target.value)}
@@ -654,7 +896,7 @@ export default function CausaModal({ causa, onClose, onSave }) {
                       className="w-32 rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
                     />
                     <div className="flex gap-1.5">
-                      {['10', '15', '30', '60'].map(dias => (
+                      {['5', '10', '20', '30', '60'].map(dias => (
                         <button
                           key={dias}
                           type="button"
@@ -676,10 +918,10 @@ export default function CausaModal({ causa, onClose, onSave }) {
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-lg hover:bg-blue-500 transition"
+                  className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-blue-500 transition"
                 >
                   <Send className="h-4 w-4" />
-                  Guardar Movimiento
+                  Guardar y Cerrar
                 </button>
               </div>
             </form>
@@ -723,12 +965,22 @@ export default function CausaModal({ causa, onClose, onSave }) {
                                 />
                               </div>
                               <div>
-                                <label className="block text-[10px] text-slate-400 font-semibold mb-1">Fecha Programada / Vencimiento</label>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="block text-[10px] text-slate-400 font-semibold">Fechas Programadas (Múltiples separadas por coma)</label>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingPericiaFecha(prev => prev ? `${prev}, ` : '')}
+                                    className="text-[10px] text-amber-400 hover:text-amber-300 font-bold underline flex items-center gap-0.5"
+                                  >
+                                    <Plus className="h-3 w-3" /> Otra Fecha
+                                  </button>
+                                </div>
                                 <input
                                   type="text"
+                                  placeholder="Ej. 09/10/26, 10/10/26"
                                   value={editingPericiaFecha}
                                   onChange={(e) => setEditingPericiaFecha(formatDateMask(e.target.value))}
-                                  className="w-full rounded-lg bg-slate-950 p-2 text-xs text-white border border-slate-700 focus:border-blue-400 focus:outline-none"
+                                  className="w-full rounded-lg bg-slate-950 p-2 text-xs text-white border border-slate-700 focus:border-blue-400 focus:outline-none font-mono"
                                 />
                               </div>
                             </div>
@@ -821,13 +1073,22 @@ export default function CausaModal({ causa, onClose, onSave }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">Fecha Programada / Vencimiento</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[11px] font-semibold text-slate-400">Fecha Programada / Vencimiento</label>
+                        <button
+                          type="button"
+                          onClick={() => setNewPericiaFecha(prev => prev ? `${prev}, ` : '')}
+                          className="text-[10px] text-amber-400 hover:text-amber-300 font-bold underline flex items-center gap-0.5"
+                        >
+                          <Plus className="h-3 w-3" /> Otra Fecha
+                        </button>
+                      </div>
                       <input
                         type="text"
-                        placeholder="Ej. 15/09/26"
+                        placeholder="Ej. 09/10/26, 10/10/26"
                         value={newPericiaFecha}
                         onChange={(e) => setNewPericiaFecha(formatDateMask(e.target.value))}
-                        className="w-full rounded-xl bg-slate-900 p-2.5 text-xs text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:outline-none"
+                        className="w-full rounded-xl bg-slate-900 p-2.5 text-xs text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:outline-none font-mono"
                       />
                     </div>
                   </div>
@@ -870,17 +1131,337 @@ export default function CausaModal({ causa, onClose, onSave }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    const updatedCausa = { ...formData, pericias: periciasState };
-                    setFormData(updatedCausa);
-                    onSave(updatedCausa);
-                    setActiveTab('timeline');
-                  }}
+                  onClick={handleSavePericiasAndClose}
                   className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-500 transition"
                 >
                   <CheckCircle2 className="h-4 w-4" />
-                  Guardar Pericias
+                  Guardar y Cerrar
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: AUDIENCIAS */}
+          {activeTab === 'audiencias' && (
+            <div className="space-y-5 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-blue-400" />
+                    Audiencias Fijadas de la Causa
+                  </h4>
+                  <p className="text-slate-400 text-[11px] mt-0.5">
+                    Consulte la disponibilidad en el calendario y agende citaciones o vistas para este expediente.
+                  </p>
+                </div>
+
+                <span className="font-mono text-xs font-bold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded border border-blue-500/30">
+                  {audienciasState.length} audiencias en causa
+                </span>
+              </div>
+
+              {/* Paso 1: CALENDARIO DE DISPONIBILIDAD O PASO 2: FORMULARIO */}
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-4">
+                
+                {audStep === 'picker' ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h5 className="font-bold text-slate-200 flex items-center gap-2">
+                        <span>Paso 1: Seleccione el día en el Calendario para verificar disponibilidad</span>
+                      </h5>
+                      <span className="text-[11px] font-mono text-amber-300">
+                        {monthNames[pickerMonth.getMonth()]} {pickerMonth.getFullYear()}
+                      </span>
+                    </div>
+
+                    {/* Mini Month Picker Controls */}
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <button
+                        type="button"
+                        onClick={() => setPickerMonth(new Date())}
+                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 transition font-semibold"
+                      >
+                        Hoy
+                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setPickerMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                          className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPickerMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                          className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Days Header */}
+                    <div className="grid grid-cols-7 gap-1 text-center font-bold text-[10px] text-slate-400">
+                      {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
+                        <span key={d}>{d}</span>
+                      ))}
+                    </div>
+
+                    {/* Grid Days */}
+                    <div className="grid grid-cols-7 gap-1">
+                      {pickerGrid.map((cell, cIdx) => {
+                        const cDate = cell.date;
+                        const dateKey = `${cDate.getFullYear()}-${String(cDate.getMonth() + 1).padStart(2, '0')}-${String(cDate.getDate()).padStart(2, '0')}`;
+                        const dayAuds = systemAudienciasMap[dateKey] || [];
+                        const isSelected = pickerSelectedDate && (
+                          cDate.getFullYear() === pickerSelectedDate.getFullYear() &&
+                          cDate.getMonth() === pickerSelectedDate.getMonth() &&
+                          cDate.getDate() === pickerSelectedDate.getDate()
+                        );
+                        const isToday = (
+                          cDate.getFullYear() === new Date().getFullYear() &&
+                          cDate.getMonth() === new Date().getMonth() &&
+                          cDate.getDate() === new Date().getDate()
+                        );
+
+                        return (
+                          <div
+                            key={cIdx}
+                            onClick={() => {
+                              setPickerSelectedDate(cDate);
+                              setNewAudFecha(formatDisplayDate(cDate));
+                            }}
+                            className={`p-1.5 rounded-lg border transition cursor-pointer flex flex-col justify-between min-h-[46px] ${
+                              !cell.isCurrentMonth
+                                ? 'bg-slate-950/20 border-slate-900 text-slate-700 opacity-40'
+                                : isSelected
+                                ? 'bg-blue-900/60 border-blue-500 text-white shadow ring-1 ring-blue-400 font-bold'
+                                : isToday
+                                ? 'bg-blue-950/60 border-blue-600/50 text-white font-bold'
+                                : 'bg-slate-900/80 border-slate-800 hover:bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-xs">{cDate.getDate()}</span>
+                              {dayAuds.length > 0 && (
+                                <span className="px-1 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-mono text-[9px] font-black border border-amber-500/40">
+                                  {dayAuds.length}
+                                </span>
+                              )}
+                            </div>
+                            {dayAuds.length > 0 && (
+                              <span className="text-[9px] font-semibold text-amber-400 truncate">
+                                {dayAuds.length} fijadas
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Inspector for selected date */}
+                    {pickerSelectedDate && (() => {
+                      const dateKey = `${pickerSelectedDate.getFullYear()}-${String(pickerSelectedDate.getMonth() + 1).padStart(2, '0')}-${String(pickerSelectedDate.getDate()).padStart(2, '0')}`;
+                      const selectedDayAuds = systemAudienciasMap[dateKey] || [];
+
+                      return (
+                        <div className="mt-3 p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-white text-xs">
+                              Audiencias el día <strong className="text-amber-300 font-mono">{formatDisplayDate(pickerSelectedDate)}</strong>:
+                            </span>
+                            {selectedDayAuds.length === 0 ? (
+                              <span className="text-emerald-400 text-[11px] font-bold">🟢 Día totalmente libre</span>
+                            ) : (
+                              <span className="text-amber-400 text-[11px] font-bold">⚠️ {selectedDayAuds.length} fijadas en el sistema</span>
+                            )}
+                          </div>
+
+                          {selectedDayAuds.length > 0 && (
+                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                              {selectedDayAuds.map((aud, aIdx) => (
+                                <div key={aIdx} className="text-[11px] p-1.5 rounded bg-slate-950 border border-slate-800 flex items-center justify-between text-slate-300">
+                                  <span className="truncate">
+                                    <strong className="text-blue-300 font-mono">{aud.causa.ipp}</strong> - {aud.tipo} ({aud.hora || '10:00'} hs)
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 shrink-0 ml-2">{aud.lugar || 'Sede UFI'}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="pt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewAudFecha(formatDisplayDate(pickerSelectedDate));
+                                setAudStep('details');
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition"
+                            >
+                              <span>Paso 2: Confirmar Fecha ({formatDisplayDate(pickerSelectedDate)}) y Completar Audiencia</span>
+                              <ArrowRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                  </div>
+                ) : (
+                  /* STEP 2: DETAILS FORM */
+                  <form onSubmit={(e) => {
+                    handleAddAudienciaItem(e);
+                    setAudStep('picker');
+                  }} className="space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <h5 className="font-bold text-white flex items-center gap-2">
+                        <span>Paso 2: Completar Horario, Lugar y Tipo para el día</span>
+                        <strong className="text-amber-300 font-mono">{newAudFecha}</strong>
+                      </h5>
+                      <button
+                        type="button"
+                        onClick={() => setAudStep('picker')}
+                        className="text-slate-400 hover:text-white underline text-[11px]"
+                      >
+                        ⬅ Cambiar Fecha en Calendario
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Tipo de Audiencia *</label>
+                        <select
+                          value={newAudTipo}
+                          onChange={(e) => setNewAudTipo(e.target.value)}
+                          className="w-full rounded-lg bg-slate-900 border border-slate-800 p-2 text-white focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="Declaración Art. 308">Declaración Art. 308</option>
+                          <option value="Prisión Preventiva">Prisión Preventiva</option>
+                          <option value="Testimonial">Testimonial</option>
+                          <option value="Audiencia Preliminar">Audiencia Preliminar</option>
+                          <option value="Conciliación / Salida Alt.">Conciliación / Salida Alt.</option>
+                          <option value="Pericial / Reconocimiento">Pericial / Reconocimiento</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Fecha Confirmada</label>
+                        <input
+                          type="text"
+                          readOnly
+                          value={newAudFecha}
+                          className="w-full rounded-lg bg-slate-900 border border-slate-800 p-2 text-amber-300 font-mono font-bold focus:outline-none cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Hora (ej. 10:00)</label>
+                        <input
+                          type="text"
+                          value={newAudHora}
+                          onChange={(e) => setNewAudHora(e.target.value)}
+                          className="w-full rounded-lg bg-slate-900 border border-slate-800 p-2 text-white font-mono focus:border-blue-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Lugar / Dependencia</label>
+                        <input
+                          type="text"
+                          value={newAudLugar}
+                          onChange={(e) => setNewAudLugar(e.target.value)}
+                          className="w-full rounded-lg bg-slate-900 border border-slate-800 p-2 text-white focus:border-blue-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-semibold mb-1">Observaciones / Notas</label>
+                      <input
+                        type="text"
+                        value={newAudObs}
+                        onChange={(e) => setNewAudObs(e.target.value)}
+                        placeholder="ej. Concurre imputado con defensor oficial..."
+                        className="w-full rounded-lg bg-slate-900 border border-slate-800 p-2 text-white focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setAudStep('picker')}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 font-semibold"
+                      >
+                        Atrás
+                      </button>
+                      <button
+                        type="submit"
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-600/30 transition"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Guardar y Cerrar
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+              </div>
+
+              {/* Audiencias List */}
+              <div className="space-y-2">
+                <h5 className="font-bold text-slate-300">Audiencias Registradas en esta Causa:</h5>
+
+                {audienciasState.length > 0 ? (
+                  <div className="space-y-2">
+                    {audienciasState.map((aud) => (
+                      <div
+                        key={aud.id}
+                        className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-3"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white text-xs">{aud.tipo}</span>
+                            <span className="font-mono text-xs font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                              {formatDisplayDate(aud.fecha)} {aud.hora ? ` - ${aud.hora} hs` : ''}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400">
+                            📍 {aud.lugar || 'Sede UFI'} ({aud.modalidad || 'Presencial'}) {aud.observaciones ? `• ${aud.observaciones}` : ''}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={aud.estado || 'Programada'}
+                            onChange={(e) => handleToggleAudienciaEstado(aud.id, e.target.value)}
+                            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none"
+                          >
+                            <option value="Programada">Programada</option>
+                            <option value="Realizada">Realizada</option>
+                            <option value="Suspendida">Suspendida</option>
+                          </select>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAudienciaItem(aud.id)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                            title="Eliminar audiencia"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-slate-500 text-xs italic p-4 text-center border border-dashed border-slate-800 rounded-xl">
+                    No hay audiencias agendadas en esta causa.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -903,14 +1484,14 @@ export default function CausaModal({ causa, onClose, onSave }) {
                     className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
                   >
                     <option value="En Trámite">En Trámite</option>
-                    <option value="Paradero">Paradero</option>
-                    <option value="Captura">Captura</option>
-                    <option value="Elevada a Juicio">Elevada a Juicio</option>
                     <option value="Archivada">Archivada</option>
                     <option value="Desestimada">Desestimada</option>
-                    <option value="Sobreseimiento">Sobreseimiento</option>
-                    <option value="Incompetencia">Incompetencia</option>
                     <option value="Remisión a Otra UFI">Remisión UFI</option>
+                    <option value="Incompetencia">Incompetencia</option>
+                    <option value="Elevada a Juicio">Elevada a Juicio</option>
+                    <option value="Sobreseimiento">Sobreseimiento</option>
+                    <option value="Paradero">Paradero</option>
+                    <option value="Captura">Captura</option>
                   </select>
                 </div>
 
@@ -922,7 +1503,7 @@ export default function CausaModal({ causa, onClose, onSave }) {
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
-                        min="1"
+                        min="0"
                         max="365"
                         value={newPlazoDias}
                         onChange={(e) => {
@@ -933,7 +1514,7 @@ export default function CausaModal({ causa, onClose, onSave }) {
                         className="w-24 rounded-xl bg-slate-950 p-2.5 text-xs text-white font-mono font-bold border border-slate-800 focus:border-blue-500 focus:outline-none text-center"
                       />
                       <div className="flex gap-1">
-                        {['5', '10', '15', '30', '60'].map(dias => (
+                        {['5', '10', '20', '30', '60'].map(dias => (
                           <button
                             key={dias}
                             type="button"
@@ -967,6 +1548,8 @@ export default function CausaModal({ causa, onClose, onSave }) {
                         setDetenidoState(val);
                         if (val === 'NO') {
                           setFechaDetencionState('');
+                          setVencPP1State('');
+                          setPpProrrogadaState(false);
                         }
                       }}
                       className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
@@ -984,11 +1567,35 @@ export default function CausaModal({ causa, onClose, onSave }) {
                     </label>
                     <select
                       value={flagranciaState}
-                      onChange={(e) => setFlagranciaState(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFlagranciaState(val);
+                        if (val === 'NO') {
+                          setFechaFlagranciaState('');
+                          setFlagranciaProrrogadaState(false);
+                          setVencIPPState('');
+                        }
+                      }}
                       className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
                     >
                       <option value="NO">NO</option>
                       <option value="SI">SÍ (FLAGRANCIA)</option>
+                    </select>
+                  </div>
+                )}
+
+                {isEnTramite && (
+                  <div>
+                    <label className="block font-semibold text-slate-300 mb-1">
+                      ¿Tiene Sumario?
+                    </label>
+                    <select
+                      value={sumarioState}
+                      onChange={(e) => setSumarioState(e.target.value)}
+                      className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="NO">NO</option>
+                      <option value="SÍ">SÍ (CON SUMARIO)</option>
                     </select>
                   </div>
                 )}
@@ -1220,7 +1827,7 @@ export default function CausaModal({ causa, onClose, onSave }) {
                             <span className="text-slate-400 text-[11px]">2º Plazo (+15 días corridos):</span>
                             <span className="inline-flex items-center gap-1 font-mono font-bold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/40 glow-urgent">
                               <span className="text-[10px] font-black text-white bg-rose-600 px-1 rounded-sm">2º</span>
-                              {vencPP1State ? calculatePP2Date(vencPP1State) : 'Sin fecha 1º'}
+                              {vencPP1State ? formatDisplayDate(calculatePP2Date(vencPP1State)) : 'Sin fecha 1º'}
                             </span>
                           </div>
                         ) : (
@@ -1228,7 +1835,7 @@ export default function CausaModal({ causa, onClose, onSave }) {
                             <span className="text-slate-400 text-[11px]">1º Plazo Activo:</span>
                             <span className="inline-flex items-center gap-1 font-mono font-semibold text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
                               <span className="text-[10px] font-black text-amber-950 bg-amber-400 px-1 rounded-sm">1º</span>
-                              {vencPP1State || 'Sin fecha'}
+                              {formatDisplayDate(vencPP1State) || 'Sin fecha'}
                             </span>
                           </div>
                         )}
@@ -1339,10 +1946,11 @@ export default function CausaModal({ causa, onClose, onSave }) {
                   Cancelar
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleModificarDatos}
                   className="rounded-xl bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-500 transition shadow-lg shadow-blue-600/20"
                 >
-                  Guardar Modificaciones
+                  Guardar y Cerrar
                 </button>
               </div>
             </form>

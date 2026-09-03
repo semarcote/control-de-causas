@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, Plus, Scale, FileText, Unlock, UserCheck, AlertTriangle } from 'lucide-react';
-import { calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, formatCaratulaMask, isDateInFuture, isValidDateString, INICIO_OPTIONS } from './CausasTable';
+import { calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, formatCaratulaMask, isDateInFuture, isValidDateString, INICIO_OPTIONS, isPPMaxDaysExceeded } from './CausasTable';
 
 export default function NewCausaModal({ onClose, onCreate }) {
-  const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const currentYear2Digits = new Date().getFullYear().toString().slice(-2);
+  const caratulaInputRef = useRef(null);
 
   const [ippDept, setIppDept] = useState('01');
   const [ippNumber, setIppNumber] = useState('');
@@ -71,11 +72,24 @@ export default function NewCausaModal({ onClose, onCreate }) {
       return;
     }
 
+    if (!specialStatus && formData.vencimiento_pp1 && formData.fecha_detencion) {
+      if (isPPMaxDaysExceeded(formData.vencimiento_pp1, formData.fecha_detencion)) {
+        alert(`La fecha de vencimiento de la Prisión Preventiva (${formData.vencimiento_pp1}) supera el límite máximo legal de 30 días respecto a la fecha de detención.`);
+        return;
+      }
+    }
+
     const normInicio = (formData.denunciado_en || '').trim().toLowerCase();
     const autoSumario = normInicio === 'mesa' || normInicio === 'mail' || normInicio === 'ciudadana';
 
+    const isDet = formData.detenido === 'SI';
     onCreate({
       ...formData,
+      fecha_inicio: todayStr,
+      fecha_detencion: isDet ? formData.fecha_detencion : '',
+      vencimiento_pp1: isDet ? formData.vencimiento_pp1 : '',
+      vencimiento_pp2: isDet ? formData.vencimiento_pp2 : '',
+      pp_prorrogada: isDet ? formData.pp_prorrogada : false,
       ipp: fullFormattedIPP,
       sumario: autoSumario ? 'SÍ' : formData.sumario,
       id: `causa-custom-${Date.now()}`
@@ -94,7 +108,7 @@ export default function NewCausaModal({ onClose, onCreate }) {
             </div>
             <div>
               <h2 className="text-base font-bold text-white">Registrar Nueva Causa Penal</h2>
-              <p className="text-xs text-slate-400">Ingreso de expediente en UFI N° 10</p>
+              <p className="text-xs text-slate-400">Ministerio Público Fiscal • Dpto. Judicial Zárate-Campana</p>
             </div>
           </div>
 
@@ -139,6 +153,14 @@ export default function NewCausaModal({ onClose, onCreate }) {
                   placeholder="004501"
                   value={ippNumber}
                   onChange={(e) => setIppNumber(e.target.value.replace(/\D/g, ''))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Tab' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (caratulaInputRef.current) {
+                        caratulaInputRef.current.focus();
+                      }
+                    }
+                  }}
                   className="w-18 font-mono text-xs font-bold text-white bg-transparent p-1 focus:outline-none placeholder-slate-600 tracking-wider"
                 />
 
@@ -158,7 +180,7 @@ export default function NewCausaModal({ onClose, onCreate }) {
                 <select
                   value={ippSuffix}
                   onChange={(e) => setIppSuffix(e.target.value)}
-                  className="bg-slate-900 font-mono text-xs font-bold text-amber-300 border border-slate-800 rounded px-1.5 py-1 focus:outline-none cursor-pointer"
+                  className="bg-slate-900 font-mono text-xs font-bold text-blue-300 border border-slate-800 rounded px-1.5 py-1 focus:outline-none cursor-pointer"
                 >
                   {['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10'].map(suf => (
                     <option key={suf} value={suf} className="bg-slate-900 text-slate-200">
@@ -190,6 +212,7 @@ export default function NewCausaModal({ onClose, onCreate }) {
               Carátula / Imputado y Delito <span className="text-rose-400">*</span>
             </label>
             <input
+              ref={caratulaInputRef}
               type="text"
               required
               placeholder="Ej. PEREZ S/ HURTO CALIFICADO"
@@ -214,6 +237,7 @@ export default function NewCausaModal({ onClose, onCreate }) {
               <label className="block font-semibold text-slate-300 mb-1">Plazo de Revisión (Días)</label>
               <input
                 type="number"
+                min="0"
                 value={formData.revisar_dias}
                 onChange={(e) => setFormData(prev => ({ ...prev, revisar_dias: e.target.value }))}
                 className="w-full rounded-xl bg-slate-950 p-2.5 text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
@@ -440,10 +464,10 @@ export default function NewCausaModal({ onClose, onCreate }) {
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 font-medium text-white shadow-lg hover:bg-blue-500 transition"
+              className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 font-semibold text-white shadow-lg hover:bg-blue-500 transition"
             >
               <Plus className="h-4 w-4" />
-              Crear Causa
+              Guardar y Cerrar
             </button>
           </div>
 

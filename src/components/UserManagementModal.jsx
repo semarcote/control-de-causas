@@ -17,6 +17,14 @@ export default function UserManagementModal({ users, onAddUser, onUpdateUser, on
 
   const [successMsg, setSuccessMsg] = useState('');
 
+  const handleEmailChange = (val, setter, currentVal) => {
+    if (val.endsWith('@') && !currentVal.endsWith('@')) {
+      setter(`${val}mpba.gov.ar`);
+    } else {
+      setter(val);
+    }
+  };
+
   const handleCreateSubmit = (e) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !password.trim()) return;
@@ -91,7 +99,7 @@ export default function UserManagementModal({ users, onAddUser, onUpdateUser, on
             </div>
             <div>
               <h2 className="text-base font-bold text-white">Gestión de Usuarios y Accesos (Administrador)</h2>
-              <p className="text-xs text-slate-400">Edita datos, claves y usuarios de la UFI N° 10</p>
+              <p className="text-xs text-slate-400">Edita datos, claves y permisos del sistema</p>
             </div>
           </div>
           <button
@@ -148,10 +156,10 @@ export default function UserManagementModal({ users, onAddUser, onUpdateUser, on
                   <input
                     type="email"
                     required
-                    placeholder="cgomez@ufi10.gob.ar"
+                    placeholder="cgomez@mpba.gov.ar"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-900 text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:outline-none"
+                    onChange={(e) => handleEmailChange(e.target.value, setEmail, email)}
+                    className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-900 text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:outline-none no-uppercase"
                   />
                 </div>
               </div>

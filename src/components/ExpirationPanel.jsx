@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Calendar, AlertTriangle, Clock, ChevronDown, ChevronUp, ShieldAlert, ArrowRight, ExternalLink, Filter } from 'lucide-react';
-import { isFinalizedState, renderBadgePP, renderBadgeEstado, renderBadgePericia, formatDisplayDate } from './CausasTable';
+import { isFinalizedState, renderBadgePP, renderBadgeEstado, renderBadgePericia, formatDisplayDate, checkPPStatusSpecial } from './CausasTable';
 
 // Helper to calculate days remaining from DD/MM/YY, DD/MM/YYYY or GMT Date strings
 export function getDaysRemaining(dateStr) {
@@ -37,32 +37,43 @@ export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, o
       // Exclude finalized/archived causes
       if (isFinalizedState(causa.estado, causa.tramite)) return;
 
-      // 1. PP Expiration (1º or 2º)
-      const vPP = causa.vencimiento_pp2 || causa.vencimiento_pp1 || causa.vencimiento_pp;
-      if (vPP) {
-        const days = getDaysRemaining(vPP);
-        if (days !== null) {
-          events.push({
-            id: `pp-${causa.id}`,
-            causa,
-            tipo: causa.vencimiento_pp2 ? '2º Vencimiento PP (Prórroga)' : '1º Vencimiento PP',
-            categoria: 'PP',
-            fecha: vPP,
-            days
-          });
+      // 1. PP Expiration (1º or 2º) - Solo si el imputado está detenido o con estado especial "Presentada"
+      const isDetenido = causa.detenido === 'SI' || causa.detenido === 'SÍ';
+      const rawPPVal = causa.estado_pp || causa.vencimiento_pp1 || causa.vencimiento_pp || '';
+      const isPresentada = String(rawPPVal).trim().toLowerCase().includes('presentad');
+
+      if (isDetenido || isPresentada) {
+        const isProrrogada = causa.pp_prorrogada === true || causa.pp_prorrogada === 'SI';
+        const vPP = isProrrogada
+          ? (causa.vencimiento_pp2 || causa.vencimiento_pp1 || causa.vencimiento_pp)
+          : (causa.vencimiento_pp1 || causa.vencimiento_pp);
+
+        if (vPP && !checkPPStatusSpecial(vPP)) {
+          const days = getDaysRemaining(vPP);
+          if (days !== null) {
+            events.push({
+              id: `pp-${causa.id}`,
+              causa,
+              tipo: isProrrogada ? '2º Vencimiento PP (Prórroga)' : '1º Vencimiento PP',
+              categoria: 'PP',
+              fecha: vPP,
+              days
+            });
+          }
         }
       }
 
       // 2. IPP Expiration
-      if (causa.vencimiento_ipp) {
-        const days = getDaysRemaining(causa.vencimiento_ipp);
+      const ippDate = causa.vencimiento_ipp ? String(causa.vencimiento_ipp).trim() : '';
+      if (ippDate && !checkPPStatusSpecial(ippDate)) {
+        const days = getDaysRemaining(ippDate);
         if (days !== null) {
           events.push({
             id: `ipp-${causa.id}`,
             causa,
             tipo: 'Vencimiento IPP',
             categoria: 'IPP',
-            fecha: causa.vencimiento_ipp,
+            fecha: ippDate,
             days
           });
         }
@@ -79,17 +90,20 @@ export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, o
         if (p.finalizada === true || p.estado === 'finalizada' || p.estado === 'cumplida') return;
 
         if (p.fecha) {
-          const days = getDaysRemaining(p.fecha);
-          if (days !== null) {
-            events.push({
-              id: `pericia-${causa.id}-${idx}`,
-              causa,
-              tipo: `Pericia: ${p.tipo || 'Procesal'}`,
-              categoria: 'Pericia',
-              fecha: p.fecha,
-              days
-            });
-          }
+          const subDates = String(p.fecha).split(/[,;]/).map(d => d.trim()).filter(Boolean);
+          subDates.forEach((subDate, dIdx) => {
+            const days = getDaysRemaining(subDate);
+            if (days !== null) {
+              events.push({
+                id: `pericia-${causa.id}-${idx}-${dIdx}`,
+                causa,
+                tipo: `Pericia: ${p.tipo || 'Procesal'}`,
+                categoria: 'Pericia',
+                fecha: subDate,
+                days
+              });
+            }
+          });
         }
       });
     });
@@ -130,7 +144,7 @@ export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, o
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               Panel de Control de Vencimientos Procesales
               <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-300 border border-amber-500/30">
-                UFI N° 10
+                MPBA
               </span>
             </h2>
             <p className="text-xs text-slate-400">
@@ -349,8 +363,8 @@ export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, o
                     {/* Date & Open Icon */}
                     <div className="flex items-center gap-3 text-xs shrink-0">
                       <div className="text-right font-mono">
-                        <span className="block font-bold text-slate-200">{evt.fecha}</span>
-                        <span className="block text-[10px] text-slate-400">{evt.causa.fuera_ufi || 'En UFI N° 10'}</span>
+                        <span className="block font-bold text-slate-200">{formatDisplayDate(evt.fecha) || evt.fecha}</span>
+                        <span className="block text-[10px] text-slate-400">{evt.causa.fuera_ufi || 'En Fiscalía'}</span>
                       </div>
                       <ExternalLink className="h-4 w-4 text-slate-500 group-hover:text-blue-400 transition" />
                     </div>

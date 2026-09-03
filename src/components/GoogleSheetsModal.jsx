@@ -181,7 +181,7 @@ export default function GoogleSheetsModal({
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Sincronización en tiempo real de causas procesales de la UFI N° 10
+                Sincronización en tiempo real de causas procesales
               </p>
             </div>
           </div>
@@ -487,7 +487,7 @@ export default function GoogleSheetsModal({
 
         {/* Modal Footer */}
         <div className="flex items-center justify-between border-t border-slate-800 bg-slate-950/70 px-6 py-3 text-xs text-slate-400">
-          <span>Control de Causas UFI N° 10 • Google Sheets API Integration</span>
+          <span>Control de Causas • Google Sheets Integration</span>
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold transition"

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, Edit3, Trash2, Clock, AlertTriangle, CheckCircle2, Gavel, ShieldOff, Scale, MapPin, Send, Archive, Activity, RotateCcw, UserX, Calendar, Unlock, FileText, UserCheck } from 'lucide-react';
+import { Eye, Edit3, Trash2, Clock, AlertTriangle, CheckCircle2, Gavel, ShieldOff, Scale, MapPin, Send, Archive, Activity, RotateCcw, UserX, Calendar, Unlock, FileText, UserCheck, Check, X } from 'lucide-react';
 
 export const INICIO_OPTIONS = [
   'Escobar 1ª, Escobar',
@@ -131,7 +131,18 @@ export function checkPPStatusSpecial(val = '') {
 export function formatDisplayDate(val) {
   if (!val) return '';
   const str = String(val).trim();
-  if (!str || str === '-' || str === 'Sin fecha') return str;
+  const norm = str.toLowerCase();
+  
+  if (
+    !str ||
+    norm === 'si' || norm === 'sí' || norm === 'no' ||
+    norm === '0' || norm === '1' ||
+    norm === 'true' || norm === 'false' ||
+    norm === 'n/a' || norm === '-' || norm === 'sin fecha' ||
+    norm.startsWith('no ') || norm.startsWith('si ') || norm.startsWith('sí ')
+  ) {
+    return '';
+  }
 
   const special = checkPPStatusSpecial(str);
   if (special) return special;
@@ -141,23 +152,128 @@ export function formatDisplayDate(val) {
     const parts = str.split('/');
     const day = parts[0].padStart(2, '0');
     const month = parts[1].padStart(2, '0');
-    let year = parts[2];
-    if (year.length === 2) year = '20' + year;
+    let year = parts[2].trim();
+    if (year.length === 4) year = year.slice(-2);
     return `${day}/${month}/${year}`;
   }
 
-  // 2. Try parsing JS Date / GMT string / ISO string (e.g. "Sun Sep 13 2026...")
-  try {
-    const d = new Date(str);
-    if (!isNaN(d.getTime())) {
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = String(d.getFullYear());
-      return `${day}/${month}/${year}`;
-    }
-  } catch (e) {}
+  // 2. Try parsing JS Date / GMT string / ISO string
+  const parsedDate = parseAnyDate(str);
+  if (parsedDate) {
+    const day = String(parsedDate.getDate()).padStart(2, '0');
+    const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+    const year = String(parsedDate.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+  }
 
-  return str;
+  return '';
+}
+
+export function getVencimientoIPP(causa) {
+  if (!causa || !causa.vencimiento_ipp) return '';
+  const str = String(causa.vencimiento_ipp).trim();
+  return formatDisplayDate(str);
+}
+
+export function renderBadgeIPP(vencIPP, causa = null) {
+  const rawVal = vencIPP || (causa ? getVencimientoIPP(causa) : '');
+  if (!rawVal) {
+    return <span className="text-slate-600 font-mono text-xs">-</span>;
+  }
+
+  const specialStatus = checkPPStatusSpecial(rawVal);
+  if (specialStatus) {
+    return <span className="text-slate-600 font-mono text-xs">-</span>;
+  }
+
+  const formatted = formatDisplayDate(rawVal);
+  if (!formatted) {
+    return <span className="text-slate-600 font-mono text-xs">-</span>;
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20" title="Vencimiento de la Instrucción Penal Preparatoria (IPP)">
+      <Calendar className="h-3 w-3 text-amber-400" />
+      {formatted}
+    </span>
+  );
+}
+
+export function parseAnyDate(dateInput) {
+  if (!dateInput) return null;
+  
+  if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
+    return dateInput;
+  }
+
+  const str = String(dateInput).trim();
+  if (!str || str === '-' || str === 'Sin fecha') return null;
+
+  // ISO or hyphenated format (YYYY-MM-DD or DD-MM-YYYY)
+  if (str.includes('-') && !str.includes('/')) {
+    const isoParts = str.split('T')[0].split('-');
+    if (isoParts.length === 3) {
+      if (isoParts[0].length === 4) {
+        const y = parseInt(isoParts[0], 10);
+        const m = parseInt(isoParts[1], 10) - 1;
+        const d = parseInt(isoParts[2], 10);
+        const dt = new Date(y, m, d);
+        if (!isNaN(dt.getTime())) return dt;
+      } else if (isoParts[2].length === 4 || isoParts[2].length === 2) {
+        const d = parseInt(isoParts[0], 10);
+        const m = parseInt(isoParts[1], 10) - 1;
+        let y = parseInt(isoParts[2], 10);
+        if (y < 100) y += 2000;
+        const dt = new Date(y, m, d);
+        if (!isNaN(dt.getTime())) return dt;
+      }
+    }
+  }
+
+  // Slash format (DD/MM/YYYY or DD/MM/YY)
+  const slashMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (slashMatch) {
+    const d = parseInt(slashMatch[1], 10);
+    const m = parseInt(slashMatch[2], 10) - 1;
+    let y = parseInt(slashMatch[3], 10);
+    if (y < 100) y += 2000;
+    const dt = new Date(y, m, d);
+    if (!isNaN(dt.getTime())) return dt;
+  }
+
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) return parsed;
+
+  return null;
+}
+
+export function getCausaIngresoDate(causa) {
+  if (!causa) return null;
+
+  // 1. Check earliest actuacion date from tramite timeline
+  if (causa.tramite) {
+    const items = String(causa.tramite).split('///').map(i => i.trim()).filter(Boolean);
+    if (items.length > 0) {
+      const firstDate = extractAndFormatDateFromActuacion(items[0]);
+      if (firstDate) {
+        const parsedFirst = parseAnyDate(firstDate);
+        if (parsedFirst) return parsedFirst;
+      }
+    }
+  }
+
+  // 2. Fall back to causa.revisado or fecha_detencion or fecha_flagrancia
+  if (causa.revisado) {
+    const parsedRev = parseAnyDate(causa.revisado);
+    if (parsedRev) return parsedRev;
+  }
+
+  if (causa.fecha_detencion) {
+    const parsedDet = parseAnyDate(causa.fecha_detencion);
+    if (parsedDet) return parsedDet;
+  }
+
+  return null;
 }
 
 export function isDateInPast(dateStr) {
@@ -191,11 +307,63 @@ export function isAbusoSexual(caratula = '', tramite = '') {
   return text.includes('abuso sexual');
 }
 
+export function formatCompactMultipleDates(dateParts) {
+  if (!dateParts || dateParts.length === 0) return '';
+  if (dateParts.length === 1) return formatDisplayDate(dateParts[0]);
+
+  const parsed = dateParts.map(dStr => {
+    const formatted = formatDisplayDate(dStr);
+    const parts = formatted.split('/');
+    if (parts.length === 3) {
+      return {
+        raw: formatted,
+        day: parts[0],
+        month: parts[1],
+        year: parts[2]
+      };
+    }
+    return { raw: formatted, day: '', month: '', year: '' };
+  });
+
+  const firstYear = parsed[0].year;
+  const firstMonth = parsed[0].month;
+  const sameYear = parsed.every(p => p.year && p.year === firstYear);
+  const sameMonth = sameYear && parsed.every(p => p.month && p.month === firstMonth);
+
+  if (sameMonth) {
+    const days = parsed.map(p => p.day);
+    if (days.length === 2) {
+      return `${days[0]} y ${days[1]}/${firstMonth}/${firstYear}`;
+    }
+    const lastDay = days[days.length - 1];
+    const initialDays = days.slice(0, -1).join(', ');
+    return `${initialDays} y ${lastDay}/${firstMonth}/${firstYear}`;
+  }
+
+  if (sameYear) {
+    const dayMonths = parsed.map(p => `${p.day}/${p.month}`);
+    if (dayMonths.length === 2) {
+      return `${dayMonths[0]} y ${dayMonths[1]}/${firstYear}`;
+    }
+    const lastDM = dayMonths[dayMonths.length - 1];
+    const initialDM = dayMonths.slice(0, -1).join(', ');
+    return `${initialDM} y ${lastDM}/${firstYear}`;
+  }
+
+  const rawList = parsed.map(p => p.raw);
+  if (rawList.length === 2) {
+    return `${rawList[0]} y ${rawList[1]}`;
+  }
+  const lastRaw = rawList[rawList.length - 1];
+  const initialRaw = rawList.slice(0, -1).join(', ');
+  return `${initialRaw} y ${lastRaw}`;
+}
+
 export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', finalizada = false) {
   if (finalizada) {
     return (
       <span key="badge-cumplida" className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-300 border border-emerald-500/40 opacity-80" title={`${pericia_detalle} (Cumplida / Finalizada)`}>
-        <span key="icon-cumplida"><CheckCircle2 className="h-3 w-3 text-emerald-400 text-xs" /></span>
+        <CheckCircle2 className="h-3 w-3 text-emerald-400 text-xs shrink-0" />
         Cumplida
         {pericia_detalle && <span className="ml-0.5 text-[10px] text-emerald-200/80 font-normal">({pericia_detalle})</span>}
       </span>
@@ -206,7 +374,7 @@ export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', fin
     if (pericia_fecha === 'Sin fecha' || pericia_detalle) {
       return (
         <span key="badge-pendiente" className="inline-flex items-center gap-1 rounded bg-slate-800/80 px-2 py-0.5 text-xs text-slate-400 border border-slate-700" title={pericia_detalle}>
-          <span key="icon-pendiente"><Clock className="h-3 w-3 text-slate-500" /></span>
+          <Clock className="h-3 w-3 text-slate-500 shrink-0" />
           Pendiente
         </span>
       );
@@ -214,36 +382,35 @@ export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', fin
     return <span key="badge-none" className="text-slate-600 font-mono text-xs">-</span>;
   }
 
-  const displayFecha = formatDisplayDate(pericia_fecha);
-  const lowDate = displayFecha.toLowerCase();
+  const rawStr = String(pericia_fecha);
+  const dateParts = rawStr.split(/[,;]/).map(d => d.trim()).filter(Boolean);
+  const compactDateLabel = formatCompactMultipleDates(dateParts);
+  const lowDate = compactDateLabel.toLowerCase();
 
-  // High Priority / Overdue (August or prior)
   if (lowDate.includes('/08/') || lowDate.includes('/05/') || lowDate.includes('/06/') || lowDate.includes('/07/')) {
     return (
-      <span key={`badge-urgent-${displayFecha}`} className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-xs font-bold text-rose-300 border border-rose-500/40 glow-urgent" title={pericia_detalle || 'Pericia Vencida / Pendiente'}>
-        <span key="icon-urgent"><AlertTriangle className="h-3 w-3 text-rose-400" /></span>
-        {displayFecha}
+      <span key={`badge-urgent-${compactDateLabel}`} className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-xs font-bold text-rose-300 border border-rose-500/40 glow-urgent whitespace-nowrap" title={pericia_detalle || 'Pericia Vencida / Pendiente'}>
+        <AlertTriangle className="h-3 w-3 text-rose-400 shrink-0" />
+        {compactDateLabel}
         {pericia_detalle && <span className="ml-0.5 text-[10px] text-rose-200/80 font-normal">({pericia_detalle})</span>}
       </span>
     );
   }
 
-  // Next / Upcoming (September)
   if (lowDate.includes('/09/')) {
     return (
-      <span key={`badge-next-${displayFecha}`} className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300 border border-amber-500/40" title={pericia_detalle}>
-        <span key="icon-next"><Clock className="h-3 w-3 text-amber-400" /></span>
-        {displayFecha}
+      <span key={`badge-next-${compactDateLabel}`} className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300 border border-amber-500/40 whitespace-nowrap" title={pericia_detalle}>
+        <Clock className="h-3 w-3 text-amber-400 shrink-0" />
+        {compactDateLabel}
         {pericia_detalle && <span className="ml-0.5 text-[10px] text-amber-200/80 font-normal">({pericia_detalle})</span>}
       </span>
     );
   }
 
-  // Scheduled future (October+)
   return (
-    <span key={`badge-future-${displayFecha}`} className="inline-flex items-center gap-1 rounded bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-300 border border-blue-500/30" title={pericia_detalle}>
-      <span key="icon-future"><Calendar className="h-3 w-3 text-blue-400" /></span>
-      {displayFecha}
+    <span key={`badge-future-${compactDateLabel}`} className="inline-flex items-center gap-1 rounded bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-300 border border-blue-500/30 whitespace-nowrap" title={pericia_detalle}>
+      <Calendar className="h-3 w-3 text-blue-400 shrink-0" />
+      {compactDateLabel}
       {pericia_detalle && <span className="ml-0.5 text-[10px] text-blue-200/80 font-normal">({pericia_detalle})</span>}
     </span>
   );
@@ -270,21 +437,54 @@ export function renderMultiplePericiasBadges(causa) {
   );
 }
 
-export function formatDateMask(inputVal) {
+function formatDateMaskSingle(inputVal) {
   if (!inputVal) return '';
 
-  const norm = String(inputVal).trim().toLowerCase();
+  const str = String(inputVal);
+  const norm = str.trim().toLowerCase();
   if (norm === 'presentada' || norm === 'excarcelado' || norm === 'libertad') {
     return inputVal;
   }
 
-  // Extract only digits
-  const digits = String(inputVal).replace(/\D/g, '').slice(0, 6);
-
+  // Extract digits up to 6 (DDMMYY)
+  const digits = str.replace(/\D/g, '').slice(0, 6);
   if (digits.length === 0) return '';
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+
+  const endsWithSlash = str.endsWith('/');
+
+  if (digits.length <= 2) {
+    if (digits.length === 2 && endsWithSlash) return `${digits}/`;
+    return digits;
+  }
+
+  if (digits.length <= 4) {
+    const day = digits.slice(0, 2);
+    const month = digits.slice(2);
+    if (digits.length === 4 && endsWithSlash) return `${day}/${month}/`;
+    return `${day}/${month}`;
+  }
+
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4);
+  return `${day}/${month}/${year}`;
+}
+
+export function formatDateMask(inputVal) {
+  if (!inputVal) return '';
+
+  if (String(inputVal).includes(',')) {
+    const parts = String(inputVal).split(',');
+    const maskedParts = parts.map((p, idx) => {
+      if (idx === parts.length - 1) {
+        return formatDateMaskSingle(p);
+      }
+      return p.trim();
+    });
+    return maskedParts.join(', ');
+  }
+
+  return formatDateMaskSingle(inputVal);
 }
 
 export function formatCaratulaMask(inputVal = '') {
@@ -295,14 +495,14 @@ export function formatCaratulaMask(inputVal = '') {
 export function extractAndFormatDateFromActuacion(itemStr = '') {
   if (!itemStr) return null;
   const trimmed = String(itemStr).trim();
-  const currentYear2Digits = new Date().getFullYear().toString().slice(-2);
+  const currentYear4Digits = new Date().getFullYear().toString();
 
   const fullMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
   if (fullMatch) {
     const day = fullMatch[1].padStart(2, '0');
     const month = fullMatch[2].padStart(2, '0');
     let year = fullMatch[3];
-    if (year.length === 4) year = year.slice(-2);
+    if (year.length === 2) year = '20' + year;
     return `${day}/${month}/${year}`;
   }
 
@@ -310,7 +510,7 @@ export function extractAndFormatDateFromActuacion(itemStr = '') {
   if (shortMatch) {
     const day = shortMatch[1].padStart(2, '0');
     const month = shortMatch[2].padStart(2, '0');
-    return `${day}/${month}/${currentYear2Digits}`;
+    return `${day}/${month}/${currentYear4Digits}`;
   }
 
   const anyFull = trimmed.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
@@ -318,7 +518,7 @@ export function extractAndFormatDateFromActuacion(itemStr = '') {
     const day = anyFull[1].padStart(2, '0');
     const month = anyFull[2].padStart(2, '0');
     let year = anyFull[3];
-    if (year.length === 4) year = year.slice(-2);
+    if (year.length === 2) year = '20' + year;
     return `${day}/${month}/${year}`;
   }
 
@@ -326,7 +526,7 @@ export function extractAndFormatDateFromActuacion(itemStr = '') {
   if (anyShort) {
     const day = anyShort[1].padStart(2, '0');
     const month = anyShort[2].padStart(2, '0');
-    return `${day}/${month}/${currentYear2Digits}`;
+    return `${day}/${month}/${currentYear4Digits}`;
   }
 
   return null;
@@ -379,6 +579,23 @@ export function isDateInFuture(dateStr) {
   return inputDate > today;
 }
 
+export function isPPMaxDaysExceeded(vencDateStr, baseDateStr = null) {
+  if (!vencDateStr || checkPPStatusSpecial(vencDateStr)) return false;
+  if (!baseDateStr) return false;
+
+  const targetDate = parseAnyDate(vencDateStr);
+  const baseDate = parseAnyDate(baseDateStr);
+  if (!targetDate || !baseDate) return false;
+
+  targetDate.setHours(0, 0, 0, 0);
+  baseDate.setHours(0, 0, 0, 0);
+
+  const diffTime = targetDate.getTime() - baseDate.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  return diffDays > 30;
+}
+
 export function calculatePPDatesFromDetencion(fechaDetencionStr) {
   if (!fechaDetencionStr || fechaDetencionStr === '-' || checkPPStatusSpecial(fechaDetencionStr)) {
     return { pp1: '', pp2: '', error: null };
@@ -407,7 +624,7 @@ export function calculatePPDatesFromDetencion(fechaDetencionStr) {
     d1.setDate(d1.getDate() + 15);
     const dayStr1 = String(d1.getDate()).padStart(2, '0');
     const monthStr1 = String(d1.getMonth() + 1).padStart(2, '0');
-    const yearStr1 = String(d1.getFullYear());
+    const yearStr1 = String(d1.getFullYear()).slice(-2);
     const pp1 = `${dayStr1}/${monthStr1}/${yearStr1}`;
 
     // PP2 = +15 calendar days from PP1 (+30 total from detención)
@@ -415,7 +632,7 @@ export function calculatePPDatesFromDetencion(fechaDetencionStr) {
     d2.setDate(d2.getDate() + 15);
     const dayStr2 = String(d2.getDate()).padStart(2, '0');
     const monthStr2 = String(d2.getMonth() + 1).padStart(2, '0');
-    const yearStr2 = String(d2.getFullYear());
+    const yearStr2 = String(d2.getFullYear()).slice(-2);
     const pp2 = `${dayStr2}/${monthStr2}/${yearStr2}`;
 
     return { pp1, pp2, error: null };
@@ -448,7 +665,7 @@ export function calculateFlagranciaIPPDates(fechaFlagranciaStr) {
     d1.setDate(d1.getDate() + 20);
     const dayStr1 = String(d1.getDate()).padStart(2, '0');
     const monthStr1 = String(d1.getMonth() + 1).padStart(2, '0');
-    const yearStr1 = String(d1.getFullYear());
+    const yearStr1 = String(d1.getFullYear()).slice(-2);
     const ipp1 = `${dayStr1}/${monthStr1}/${yearStr1}`;
 
     // IPP 2º Plazo = +20 calendar days from 1º Plazo (+40 total)
@@ -456,7 +673,7 @@ export function calculateFlagranciaIPPDates(fechaFlagranciaStr) {
     d2.setDate(d2.getDate() + 20);
     const dayStr2 = String(d2.getDate()).padStart(2, '0');
     const monthStr2 = String(d2.getMonth() + 1).padStart(2, '0');
-    const yearStr2 = String(d2.getFullYear());
+    const yearStr2 = String(d2.getFullYear()).slice(-2);
     const ipp2 = `${dayStr2}/${monthStr2}/${yearStr2}`;
 
     return { ipp1, ipp2, error: null };
@@ -485,7 +702,7 @@ export function calculatePP2Date(venc1Str) {
 
     const dayStr = String(d.getDate()).padStart(2, '0');
     const monthStr = String(d.getMonth() + 1).padStart(2, '0');
-    const yearStrFinal = String(d.getFullYear());
+    const yearStrFinal = String(d.getFullYear()).slice(-2);
 
     return `${dayStr}/${monthStr}/${yearStrFinal}`;
   } catch (e) {
@@ -494,6 +711,7 @@ export function calculatePP2Date(venc1Str) {
 }
 
 export function renderBadgePP(causa) {
+  const isDetenido = causa.detenido === 'SI' || causa.detenido === 'SÍ';
   const rawVal = causa.estado_pp || causa.vencimiento_pp1 || causa.vencimiento_pp || '';
   const specialStatus = checkPPStatusSpecial(rawVal);
 
@@ -524,26 +742,34 @@ export function renderBadgePP(causa) {
     );
   }
 
-  const rawV1 = causa.vencimiento_pp1 || causa.vencimiento_pp || '';
-  const rawV2 = causa.vencimiento_pp2 || (rawV1 ? calculatePP2Date(rawV1) : '');
-  const isProrrogada = causa.pp_prorrogada === true || causa.pp_prorrogada === 'SI';
-
-  const v1 = formatDisplayDate(rawV1);
-  const v2 = formatDisplayDate(rawV2);
-
-  // Si está prorrogada, se muestra ÚNICAMENTE el 2º vencimiento (+15 días) en ROJO
-  if (isProrrogada && (v2 || v1)) {
-    const finalV2 = v2 || formatDisplayDate(calculatePP2Date(rawV1));
-    return (
-      <span key="pp-v2" className="inline-flex items-center gap-1 font-mono text-xs text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/40 font-bold glow-urgent" title="2º Vencimiento PP (Prorrogado +15 días corridos)">
-        <span className="text-[10px] font-extrabold text-white bg-rose-600 px-1 rounded-sm">2º</span>
-        {finalV2}
-      </span>
-    );
+  // Si el imputado no está detenido y no posee estado especial, Prisión Preventiva no aplica
+  if (!isDetenido) {
+    return <span key="pp-none" className="text-slate-600 font-mono text-xs">-</span>;
   }
 
-  // Si no está prorrogada pero hay 1º vencimiento, se muestra ÚNICAMENTE el 1º en AMARILLO
-  if (v1 && v1.trim() !== '') {
+  const rawV1 = causa.vencimiento_pp1 || causa.vencimiento_pp || '';
+  const v1 = formatDisplayDate(rawV1);
+  const rawV2 = causa.vencimiento_pp2 || (v1 ? calculatePP2Date(v1) : '');
+  const v2 = formatDisplayDate(rawV2);
+  const isProrrogada = causa.pp_prorrogada === true || causa.pp_prorrogada === 'SI';
+
+  const isValidDateStr = (s) => /^\d{1,2}\/\d{1,2}\/\d{2}$/.test(s);
+
+  // Si está prorrogada, se muestra ÚNICAMENTE el 2º vencimiento (+15 días) en ROJO
+  if (isProrrogada && (isValidDateStr(v2) || isValidDateStr(v1))) {
+    const finalV2 = isValidDateStr(v2) ? v2 : formatDisplayDate(calculatePP2Date(v1));
+    if (isValidDateStr(finalV2)) {
+      return (
+        <span key="pp-v2" className="inline-flex items-center gap-1 font-mono text-xs text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/40 font-bold glow-urgent" title="2º Vencimiento PP (Prorrogado +15 días corridos)">
+          <span className="text-[10px] font-extrabold text-white bg-rose-600 px-1 rounded-sm">2º</span>
+          {finalV2}
+        </span>
+      );
+    }
+  }
+
+  // Si no está prorrogada pero hay 1º vencimiento VÁLIDO, se muestra ÚNICAMENTE el 1º en AMARILLO
+  if (isValidDateStr(v1)) {
     return (
       <span key="pp-v1" className="inline-flex items-center gap-1 font-mono text-xs text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30 font-semibold" title="1º Vencimiento Prisión Preventiva">
         <span className="text-[10px] font-extrabold text-amber-950 bg-amber-400 px-1 rounded-sm">1º</span>
@@ -555,13 +781,12 @@ export function renderBadgePP(causa) {
   return <span key="pp-none" className="text-slate-600 font-mono text-xs">-</span>;
 }
 
-export function renderBadgeEstado(estado, tramite = '', causa = null) {
+export function renderBadgeEstadoProcesal(estado) {
   const st = (estado || '').trim().toLowerCase();
 
-  // Finalized / Resolution / Special States (Strict matching on causa.estado)
   if (st === 'paradero') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-300 border border-amber-500/40">
+      <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-300 border border-amber-500/40 whitespace-nowrap">
         <MapPin className="h-3 w-3 text-amber-400" />
         Paradero
       </span>
@@ -570,7 +795,7 @@ export function renderBadgeEstado(estado, tramite = '', causa = null) {
 
   if (st === 'captura') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-rose-500/20 px-2.5 py-1 text-xs font-bold text-rose-300 border border-rose-500/40 glow-urgent">
+      <span className="inline-flex items-center gap-1 rounded-md bg-rose-500/20 px-2.5 py-1 text-xs font-bold text-rose-300 border border-rose-500/40 glow-urgent whitespace-nowrap">
         <UserX className="h-3 w-3 text-rose-400" />
         Captura
       </span>
@@ -579,7 +804,7 @@ export function renderBadgeEstado(estado, tramite = '', causa = null) {
 
   if (st === 'elevada a juicio' || st.includes('elevada')) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-purple-500/10 px-2.5 py-1 text-xs font-medium text-purple-300 border border-purple-800/40">
+      <span className="inline-flex items-center gap-1 rounded-md bg-purple-500/20 px-2.5 py-1 text-xs font-semibold text-purple-300 border border-purple-500/40 whitespace-nowrap">
         <Gavel className="h-3 w-3 text-purple-400" />
         Elevada a Juicio
       </span>
@@ -588,7 +813,7 @@ export function renderBadgeEstado(estado, tramite = '', causa = null) {
 
   if (st === 'sobreseimiento' || st.includes('sobrese')) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700">
+      <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700 whitespace-nowrap">
         <Scale className="h-3 w-3 text-amber-500/70" />
         Sobreseimiento
       </span>
@@ -597,7 +822,7 @@ export function renderBadgeEstado(estado, tramite = '', causa = null) {
 
   if (st === 'desestimada' || st.includes('desestim')) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-slate-800/90 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700">
+      <span className="inline-flex items-center gap-1 rounded-md bg-slate-800/90 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700 whitespace-nowrap">
         <ShieldOff className="h-3 w-3 text-slate-500" />
         Desestimada
       </span>
@@ -606,7 +831,7 @@ export function renderBadgeEstado(estado, tramite = '', causa = null) {
 
   if (st === 'incompetencia' || st.includes('incompet')) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700">
+      <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700 whitespace-nowrap">
         <MapPin className="h-3 w-3 text-cyan-500/70" />
         Incompetencia
       </span>
@@ -615,51 +840,77 @@ export function renderBadgeEstado(estado, tramite = '', causa = null) {
 
   if (st === 'remisión a otra ufi' || (st.includes('remisi') && st.includes('ufi'))) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700">
+      <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700 whitespace-nowrap">
         <Send className="h-3 w-3 text-sky-500/70" />
-        Remisión a Otra UFI
+        Remisión UFI
       </span>
     );
   }
 
   if (st === 'archivada' || st === 'archivo') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700">
+      <span className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-400 border border-slate-700 whitespace-nowrap">
         <Archive className="h-3 w-3 text-slate-500" />
         Archivada
       </span>
     );
   }
 
-  // Active / Instruction States: ONLY 'Revisar' or 'Esperar' based on last revision date + revision days!
-  let isRevisar = st === 'revisar';
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/15 px-2.5 py-1 text-xs font-semibold text-blue-300 border border-blue-500/30 whitespace-nowrap">
+      <Activity className="h-3 w-3 text-blue-400" />
+      En Trámite
+    </span>
+  );
+}
 
-  if (!isRevisar && causa && causa.revisado && causa.revisar_dias) {
-    const parts = causa.revisado.trim().split('/');
-    if (parts.length === 3 && parts[2].trim().length >= 2) {
-      let day = parseInt(parts[0], 10);
-      let month = parseInt(parts[1], 10) - 1;
-      let year = parseInt(parts[2].trim(), 10);
-      if (year < 100) year += 2000;
+export function isCausaRevisar(causa) {
+  if (!causa || isFinalizedState(causa.estado, causa.tramite)) return false;
 
-      const lastRevisadoDate = new Date(year, month, day);
-      const daysLimit = parseInt(causa.revisar_dias, 10) || 30;
+  const st = (causa.estado || '').trim().toLowerCase();
+  if (st === 'revisar') return true;
 
-      const targetDate = new Date(lastRevisadoDate);
-      targetDate.setDate(targetDate.getDate() + daysLimit);
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      if (today >= targetDate) {
-        isRevisar = true;
-      }
+  let lastRevisadoDate = parseAnyDate(causa.revisado);
+  if (!lastRevisadoDate && causa.tramite) {
+    const actDate = extractAndFormatDateFromActuacion(causa.tramite);
+    if (actDate) {
+      lastRevisadoDate = parseAnyDate(actDate);
     }
   }
 
-  if (isRevisar) {
+  if (lastRevisadoDate) {
+    let daysLimit = parseInt(causa.revisar_dias, 10);
+    if (isNaN(daysLimit)) daysLimit = 10;
+
+    const targetDate = new Date(lastRevisadoDate);
+    targetDate.setDate(targetDate.getDate() + daysLimit);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (today >= targetDate) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function isCausaEsperar(causa) {
+  if (!causa || isFinalizedState(causa.estado, causa.tramite)) return false;
+  return !isCausaRevisar(causa);
+}
+
+export function renderBadgeRevisionStatus(causa) {
+  if (!causa) return <span className="text-slate-600 font-mono text-xs">-</span>;
+
+  if (isFinalizedState(causa.estado, causa.tramite)) {
+    return <span className="text-slate-600 font-mono text-xs text-center block">-</span>;
+  }
+
+  if (isCausaRevisar(causa)) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md bg-rose-500/15 px-2.5 py-1 text-xs font-semibold text-rose-400 border border-rose-500/30 glow-urgent">
+      <span className="inline-flex items-center gap-1 rounded-md bg-rose-500/15 px-2.5 py-1 text-xs font-semibold text-rose-400 border border-rose-500/30 glow-urgent whitespace-nowrap" title="Excedió el plazo de revisión">
         <AlertTriangle className="h-3 w-3" />
         Revisar
       </span>
@@ -667,11 +918,15 @@ export function renderBadgeEstado(estado, tramite = '', causa = null) {
   }
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400 border border-emerald-500/30">
+    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400 border border-emerald-500/30 whitespace-nowrap" title="En plazo normal de revisión">
       <Clock className="h-3 w-3" />
       Esperar
     </span>
   );
+}
+
+export function renderBadgeEstado(estado, tramite = '', causa = null) {
+  return renderBadgeEstadoProcesal(estado);
 }
 
 export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDeleteCausa, onReabrirCausa, onSaveCausa }) {
@@ -693,17 +948,17 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-900/90 text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800">
             <tr>
-              <th className="px-4 py-3.5">I.P.P.</th>
-              <th className="px-4 py-3.5">Revisión</th>
-              <th className="px-4 py-3.5">Sumario</th>
-              <th className="px-4 py-3.5">Denuncia</th>
-              <th className="px-2 py-3.5 text-center w-16">Detenido</th>
-              <th className="px-4 py-3.5">Venc. PP</th>
-              <th className="px-4 py-3.5">Venc. IPP</th>
-              <th className="px-4 py-3.5">Pericias</th>
-              <th className="px-4 py-3.5">Carátula</th>
-              <th className="px-4 py-3.5">Último Trámite / Actuación</th>
-              <th className="px-4 py-3.5 text-right">Acciones</th>
+              <th className="px-4 py-3.5 text-left">I.P.P.</th>
+              <th className="px-4 py-3.5 text-left">Revisión</th>
+              <th className="px-4 py-3.5 text-left">Sumario</th>
+              <th className="px-4 py-3.5 text-left">Denuncia</th>
+              <th className="px-2 py-3.5 text-left w-16">Detenido</th>
+              <th className="px-4 py-3.5 text-left">Venc. PP</th>
+              <th className="px-4 py-3.5 text-left">Venc. IPP</th>
+              <th className="px-4 py-3.5 text-left">Pericias</th>
+              <th className="px-4 py-3.5 text-left">Carátula</th>
+              <th className="px-4 py-3.5 text-left">Último Trámite / Actuación</th>
+              <th className="px-4 py-3.5 text-left">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60 bg-slate-950/40 text-slate-300">
@@ -715,7 +970,8 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
               const isDetenidoEnTramite = isDetenido && !finalized;
               const isCiudadana = (causa.denunciado_en || '').trim().toLowerCase().includes('ciudadan');
               const isCiudadanaEnTramite = isCiudadana && !finalized;
-              const hasIPP = !!(causa.vencimiento_ipp && causa.vencimiento_ipp.trim() !== '' && causa.vencimiento_ipp !== '-' && causa.vencimiento_ipp !== 'Sin fecha');
+              const ippVal = getVencimientoIPP(causa);
+              const hasIPP = !!(ippVal && ippVal.trim() !== '' && ippVal !== '-' && ippVal !== 'Sin fecha');
               const isIPPEnTramite = hasIPP && !finalized;
               const hasSumario = causaHasSumario(causa);
 
@@ -734,8 +990,6 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                       ? 'bg-rose-950/40 border-l-4 border-l-rose-500 hover:bg-rose-900/50 text-rose-100 shadow-[0_0_18px_rgba(244,63,94,0.2)]'
                       : isDetenidoEnTramite
                       ? 'bg-emerald-950/60 border-l-4 border-l-emerald-400 hover:bg-emerald-900/70 text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)] ring-1 ring-emerald-500/30'
-                      : isIPPEnTramite
-                      ? 'bg-amber-950/40 border-l-4 border-l-amber-400 hover:bg-amber-900/50 text-amber-100 shadow-[0_0_18px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/20'
                       : isCiudadanaEnTramite
                       ? 'bg-cyan-950/40 border-l-4 border-l-cyan-400 hover:bg-cyan-900/50 text-cyan-100 shadow-[0_0_18px_rgba(6,182,212,0.2)] ring-1 ring-cyan-500/20'
                       : 'hover:bg-slate-800/40'
@@ -747,16 +1001,14 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                     <div className="flex items-center gap-2">
                       <span className={`font-mono text-sm ${
                         finalized 
-                          ? 'text-slate-400 group-hover:text-blue-300' 
+                          ? 'text-slate-400 group-hover:text-slate-200' 
                           : isAbusoEnTramite 
                           ? 'text-rose-400 font-extrabold' 
                           : isDetenidoEnTramite
                           ? 'text-emerald-400 font-extrabold'
-                          : isIPPEnTramite
-                          ? 'text-amber-300 font-extrabold'
                           : isCiudadanaEnTramite
                           ? 'text-cyan-300 font-extrabold'
-                          : 'text-blue-400 group-hover:text-blue-300'
+                          : 'text-white font-bold group-hover:text-slate-200'
                       }`}>
                         {causa.ipp || 'S/N'}
                       </span>
@@ -773,48 +1025,39 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                     </div>
                   </td>
 
-                  {/* Estado Procesal (Revisión) */}
+                  {/* Revisión (Plazo de Control) */}
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {renderBadgeEstado(causa.estado, causa.tramite, causa)}
+                    {renderBadgeRevisionStatus(causa)}
                   </td>
 
-                  {/* Sumario (SÍ / NO) */}
-                  <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                    {hasSumario ? (
-                      /* Una vez que cambia a SÍ, desaparece el desplegable */
-                      <span
-                        className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-300 border border-amber-500/40"
-                        title={causa.sumario ? `Sumario N° ${causa.sumario}` : 'Con Sumario'}
-                      >
-                        <FileText className="h-3 w-3 text-amber-400" />
-                        SÍ
-                      </span>
-                    ) : (
-                      /* Mientras esté en NO, se muestra el menú desplegable */
-                      <select
-                        value="NO"
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseUp={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          if (e.target.value === 'SI') {
-                            const updatedCausa = {
-                              ...causa,
-                              sumario: causa.sumario?.trim() || 'SÍ'
-                            };
-                            if (onSaveCausa) {
-                              onSaveCausa(updatedCausa);
-                            }
-                          }
-                        }}
-                        className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-bold text-slate-400 border border-slate-800 hover:bg-slate-800 hover:text-slate-200 transition cursor-pointer focus:outline-none"
-                      >
-                        <option value="NO" className="bg-slate-900 text-slate-300 font-normal">NO</option>
-                        <option value="SI" className="bg-slate-900 text-amber-300 font-bold">📄 SÍ</option>
-                      </select>
-                    )}
+                  {/* Sumario (Tilde verde o Cruz roja interactiva) */}
+                  <td className="px-4 py-3 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const nextVal = hasSumario ? 'NO' : 'SÍ';
+                        const updatedCausa = {
+                          ...causa,
+                          sumario: nextVal
+                        };
+                        if (onSaveCausa) {
+                          onSaveCausa(updatedCausa);
+                        }
+                      }}
+                      title={hasSumario ? 'Sumario: SÍ (Haz clic para cambiar a NO)' : 'Sumario: NO (Haz clic para cambiar a SÍ)'}
+                      className={`inline-flex items-center justify-center h-7 w-7 rounded-lg transition border cursor-pointer ${
+                        hasSumario
+                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/35 hover:scale-110'
+                          : 'bg-rose-500/20 text-rose-400 border-rose-500/50 hover:bg-rose-500/35 hover:scale-110'
+                      }`}
+                    >
+                      {hasSumario ? (
+                        <Check className="h-4 w-4 stroke-[3]" />
+                      ) : (
+                        <X className="h-4 w-4 stroke-[3]" />
+                      )}
+                    </button>
                   </td>
 
                   {/* Denuncia / Inicio (Badge estilizado) */}
@@ -841,14 +1084,7 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
 
                   {/* Vencimiento IPP */}
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {causa.vencimiento_ipp ? (
-                      <span className="inline-flex items-center gap-1 font-mono text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                        <Calendar className="h-3 w-3 text-amber-400" />
-                        {formatDisplayDate(causa.vencimiento_ipp)}
-                      </span>
-                    ) : (
-                      <span className="text-slate-600 font-mono text-xs">-</span>
-                    )}
+                    {renderBadgeIPP(causa.vencimiento_ipp, causa)}
                   </td>
 
                   {/* Pericias con alertas de calendario */}
