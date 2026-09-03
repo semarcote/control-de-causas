@@ -229,9 +229,9 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
 
   const handleSavePericiasAndClose = () => {
     let finalPericias = [...periciasState];
-    let updatedTramite = causa.tramite || '';
+    let updatedTramite = formData.tramite || causa.tramite || '';
 
-    // If there is an un-added pericia being typed in the fields, auto-process it
+    // Only process un-added inputs if user typed something in newPericiaTipo or newPericiaFecha AND didn't click + Agregar Pericia
     if (newPericiaTipo.trim() || newPericiaFecha.trim()) {
       if (newPericiaFecha.trim() && isDateInPast(newPericiaFecha.trim())) {
         alert(`La fecha de la pericia (${newPericiaFecha.trim()}) es errónea: No puede ser una fecha anterior a la fecha del día de hoy.`);
@@ -241,24 +241,41 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
       const tipoText = newPericiaTipo.trim() || 'Pericia Procesal';
       const fechaText = newPericiaFecha.trim() || 'Sin fecha';
 
-      const newItem = {
-        id: `p-${Date.now()}`,
-        tipo: tipoText,
-        fecha: fechaText
-      };
+      // Check if this pericia was ALREADY added by handleAddPericiaItem
+      const alreadyExists = finalPericias.some(p => p.tipo === tipoText && p.fecha === fechaText);
 
-      finalPericias.push(newItem);
+      if (!alreadyExists) {
+        const newItem = {
+          id: `p-${Date.now()}`,
+          tipo: tipoText,
+          fecha: fechaText
+        };
 
-      const todayStrShort = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-      const periciaEntry = `${todayStrShort} Registro de Pericia procesal: ${tipoText} (Fecha fijada: ${fechaText})`;
-      updatedTramite = updatedTramite ? `${updatedTramite} /// ${periciaEntry}` : periciaEntry;
+        finalPericias.push(newItem);
+
+        const todayStrShort = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+        const periciaEntry = `${todayStrShort} Registro de Pericia procesal: ${tipoText} (Fecha fijada: ${fechaText})`;
+        if (!updatedTramite.includes(periciaEntry)) {
+          updatedTramite = updatedTramite ? `${updatedTramite} /// ${periciaEntry}` : periciaEntry;
+        }
+      }
     }
+
+    // Deduplicate pericias by ID or tipo+fecha
+    const uniqueMap = new Map();
+    finalPericias.forEach(p => {
+      if (p) {
+        const key = p.id || `${p.tipo}-${p.fecha}`;
+        uniqueMap.set(key, p);
+      }
+    });
+    const deduplicatedPericias = Array.from(uniqueMap.values());
 
     const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const updatedCausa = {
       ...formData,
       tramite: updatedTramite,
-      pericias: finalPericias,
+      pericias: deduplicatedPericias,
       revisado: todayStr
     };
 
