@@ -50,7 +50,7 @@ export default function UserManagementModal({ users, onAddUser, onUpdateUser, on
     setEditName(user.name.toUpperCase());
     setEditEmail(user.email);
     setEditPassword(user.password);
-    setEditRole(user.role);
+    setEditRole(user.role === 'Secretario / Instructor' ? 'Secretario' : user.role);
   };
 
   const cancelEdit = () => {
@@ -329,7 +329,7 @@ export default function UserManagementModal({ users, onAddUser, onUpdateUser, on
                           <span className={`rounded px-2 py-0.5 text-[10px] font-bold border ${
                             isAdminUser ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'
                           }`}>
-                            {u.role}
+                            {u.role === 'Secretario / Instructor' ? 'Secretario' : u.role}
                           </span>
                         </div>
                         <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono mt-0.5">

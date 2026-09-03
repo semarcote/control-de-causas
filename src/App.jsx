@@ -101,6 +101,13 @@ function mergeCausas(localList = [], remoteList = []) {
 }
 
 export default function App() {
+  // Helper to normalize legacy role names
+  const normalizeUser = (u) => {
+    if (!u) return u;
+    const role = (u.role === 'Secretario / Instructor') ? 'Secretario' : u.role;
+    return { ...u, role };
+  };
+
   // Users state (Preserves customized credentials from localStorage or Google Sheets)
   const [users, setUsers] = useState(() => {
     const saved = localStorage.getItem(USERS_STORAGE_KEY);
@@ -108,7 +115,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map(normalizeUser);
         }
       } catch (e) {}
     }
@@ -123,8 +130,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
 
   const handleLogin = (user) => {
-    setCurrentUser(user);
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
+    const normUser = normalizeUser(user);
+    setCurrentUser(normUser);
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(normUser));
   };
 
   const handleLogout = () => {
@@ -140,7 +148,8 @@ export default function App() {
       fetchUsersFromSheetsTab(url).then(remoteUsers => {
         if (Array.isArray(remoteUsers) && remoteUsers.length > 0) {
           setUsers(prevLocalUsers => {
-            const mergedUsers = remoteUsers.map(r => {
+            const mergedUsers = remoteUsers.map(rawR => {
+              const r = normalizeUser(rawR);
               const localMatch = prevLocalUsers.find(l => l.id === r.id || l.name?.toUpperCase() === r.name?.toUpperCase());
               if (localMatch && localMatch.password && localMatch.password !== 'admin' && (r.password === 'admin' || !r.password)) {
                 return { ...r, password: localMatch.password };
@@ -156,9 +165,10 @@ export default function App() {
             if (!prev) return prev;
             const matchingRemote = remoteUsers.find(u => u.id === prev.id || u.email?.toLowerCase() === prev.email?.toLowerCase() || u.name?.toUpperCase() === prev.name?.toUpperCase());
             if (matchingRemote) {
-              const updatedSession = (prev.password && prev.password !== 'admin' && matchingRemote.password === 'admin')
-                ? { ...matchingRemote, password: prev.password }
-                : matchingRemote;
+              const normRemote = normalizeUser(matchingRemote);
+              const updatedSession = (prev.password && prev.password !== 'admin' && normRemote.password === 'admin')
+                ? { ...normRemote, password: prev.password }
+                : normRemote;
               localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedSession));
               return updatedSession;
             }
