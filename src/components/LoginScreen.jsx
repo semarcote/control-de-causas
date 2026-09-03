@@ -156,57 +156,98 @@ export default function LoginScreen({ users, onLogin, onRegisterUser }) {
 
           {/* TAB 1: INICIAR SESIÓN */}
           {activeTab === 'login' && (
-            <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1.5">
-                  Usuario / Correo Electrónico
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="ejemplo@mpba.gov.ar"
-                    value={email}
-                    onChange={(e) => handleEmailChange(e.target.value, setEmail, email)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition no-uppercase"
-                  />
+            <div className="space-y-4">
+              {Array.isArray(users) && users.length > 0 && (
+                <div className="space-y-2">
+                  <label className="block text-slate-300 font-semibold text-xs">
+                    Seleccionar Usuario / Instructor
+                  </label>
+                  <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                    {users.map(u => (
+                      <button
+                        key={u.id || u.email}
+                        type="button"
+                        onClick={() => handleQuickLogin(u)}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition ${
+                          email.toLowerCase() === u.email?.toLowerCase()
+                            ? 'bg-blue-600/20 border-blue-500 text-white shadow-md'
+                            : 'bg-slate-900/80 border-slate-800 text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                          <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shrink-0">
+                            <User className="h-4 w-4 text-blue-400" />
+                          </div>
+                          <div className="truncate">
+                            <div className="font-bold text-xs truncate">{u.name}</div>
+                            <div className="text-[10px] text-slate-400 truncate">{u.role || 'Usuario Judicial'}</div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded-lg border border-blue-500/20 shrink-0 hover:bg-blue-600 hover:text-white transition">
+                          Ingresar →
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative my-3 text-center">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
+                    <span className="relative bg-[#0d1322] px-2 text-[10px] text-slate-500 uppercase tracking-wider">o ingresar credenciales</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1.5">
-                  Contraseña
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition no-uppercase"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+              <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1.5">
+                    Usuario / Correo Electrónico
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="ejemplo@mpba.gov.ar"
+                      value={email}
+                      onChange={(e) => handleEmailChange(e.target.value, setEmail, email)}
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition no-uppercase"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                className="w-full mt-2 flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-lg shadow-blue-600/25 hover:from-blue-500 hover:to-indigo-500 transition active:scale-[0.99]"
-              >
-                <KeyRound className="h-4 w-4" />
-                Ingresar al Sistema
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </form>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1.5">
+                    Contraseña
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-slate-900/90 text-white placeholder-slate-500 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition no-uppercase"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full mt-2 flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-lg shadow-blue-600/25 hover:from-blue-500 hover:to-indigo-500 transition active:scale-[0.99]"
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Ingresar al Sistema
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </form>
+            </div>
           )}
 
           {/* TAB 2: CREAR NUEVO USUARIO */}

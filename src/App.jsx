@@ -119,17 +119,8 @@ export default function App() {
     localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
   }, [users]);
 
-  // Session state (Defaults to Administrator General or saved custom session)
-  const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed) return parsed;
-      } catch (e) {}
-    }
-    return ADMIN_USER;
-  });
+  // Session state (Always starts at null on page load so it opens the main user selection menu)
+  const [currentUser, setCurrentUser] = useState(null);
 
   const handleLogin = (user) => {
     setCurrentUser(user);
