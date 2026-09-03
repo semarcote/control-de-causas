@@ -6,7 +6,7 @@ export default function UserManagementModal({ users, onAddUser, onUpdateUser, on
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('Secretario / Instructor');
+  const [role, setRole] = useState('Secretario');
   
   // Edit user state (null when not editing)
   const [editingUserId, setEditingUserId] = useState(null);
@@ -187,7 +187,7 @@ export default function UserManagementModal({ users, onAddUser, onUpdateUser, on
                   className="w-full px-3 py-2 rounded-xl bg-slate-900 text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
                 >
                   <option value="Instructor Judicial">Instructor Judicial</option>
-                  <option value="Secretario / Instructor">Secretario / Instructor</option>
+                  <option value="Secretario">Secretario</option>
                   <option value="Auxiliar Letrado">Auxiliar Letrado</option>
                   <option value="Empleado Judicial">Empleado Judicial</option>
                   <option value="Fiscal Titular / Adjunto">Fiscal Titular / Adjunto</option>
@@ -282,7 +282,7 @@ export default function UserManagementModal({ users, onAddUser, onUpdateUser, on
                               className="w-full px-3 py-2 rounded-xl bg-slate-900 text-white border border-slate-700 focus:border-blue-500 focus:outline-none"
                             >
                               <option value="Instructor Judicial">Instructor Judicial</option>
-                              <option value="Secretario / Instructor">Secretario / Instructor</option>
+                              <option value="Secretario">Secretario</option>
                               <option value="Auxiliar Letrado">Auxiliar Letrado</option>
                               <option value="Empleado Judicial">Empleado Judicial</option>
                               <option value="Fiscal Titular / Adjunto">Fiscal Titular / Adjunto</option>

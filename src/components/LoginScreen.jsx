@@ -273,7 +273,7 @@ export default function LoginScreen({ users, onLogin, onRegisterUser }) {
                   className="w-full p-2 rounded-xl bg-slate-900/90 text-white border border-slate-800 focus:border-emerald-500 focus:outline-none"
                 >
                   <option value="Instructor Judicial">Instructor Judicial</option>
-                  <option value="Secretario / Instructor">Secretario / Instructor</option>
+                  <option value="Secretario">Secretario</option>
                   <option value="Auxiliar Letrado">Auxiliar Letrado</option>
                   <option value="Empleado Judicial">Empleado Judicial</option>
                 </select>
