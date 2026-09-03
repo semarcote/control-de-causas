@@ -273,19 +273,6 @@ export function getCausaIngresoDate(causa) {
     if (parsedDet) return parsedDet;
   }
 
-  if (causa.fecha_flagrancia) {
-    const parsedFlag = parseAnyDate(causa.fecha_flagrancia);
-    if (parsedFlag) return parsedFlag;
-  }
-
-  // 3. Fall back to IPP year (e.g. IPP ... 26/00 -> 01/01/2026)
-  if (causa.ipp) {
-    const parsedIpp = parseIPP(causa.ipp);
-    if (parsedIpp && parsedIpp.year && parsedIpp.year !== 9999) {
-      return new Date(parsedIpp.year, 0, 1);
-    }
-  }
-
   return null;
 }
 

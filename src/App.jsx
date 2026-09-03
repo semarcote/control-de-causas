@@ -363,8 +363,8 @@ export default function App() {
 
       // 5. Entry Date Filter (Causas ingresadas a partir de una fecha determinada)
       if (fechaDesdeFilter && fechaDesdeFilter.trim().length >= 6) {
-        const startDate = parseAnyDate(fechaDesdeFilter);
-        if (startDate) {
+        const startDate = parseAnyDate(fechaDesdeFilter.trim());
+        if (startDate && !isNaN(startDate.getTime())) {
           startDate.setHours(0, 0, 0, 0);
           const ingresoDate = getCausaIngresoDate(causa);
           if (!ingresoDate) return false;
