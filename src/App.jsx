@@ -362,7 +362,7 @@ export default function App() {
       }
 
       // 5. Entry Date Filter (Causas ingresadas a partir de una fecha determinada)
-      if (fechaDesdeFilter && fechaDesdeFilter.trim().length >= 8) {
+      if (fechaDesdeFilter && fechaDesdeFilter.trim().length >= 6) {
         const startDate = parseAnyDate(fechaDesdeFilter);
         if (startDate) {
           startDate.setHours(0, 0, 0, 0);
@@ -397,7 +397,7 @@ export default function App() {
       }
       return 0;
     });
-  }, [causas, searchTerm, statusFilter, sumarioFilter, inicioFilter, sortBy]);
+  }, [causas, searchTerm, statusFilter, sumarioFilter, inicioFilter, fechaDesdeFilter, sortBy]);
 
   // Handlers
   const handleSaveCausa = (updatedCausa) => {
