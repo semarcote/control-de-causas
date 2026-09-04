@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, UserPlus, Shield, Key, Trash2, CheckCircle2, User, Mail, Pencil, Save, RotateCcw } from 'lucide-react';
+import { X, UserPlus, Shield, Key, Trash2, CheckCircle2, User, Mail, Pencil, Save, RotateCcw, LogIn } from 'lucide-react';
 
-export default function UserManagementModal({ users, onAddUser, onUpdateUser, onDeleteUser, onClose }) {
+export default function UserManagementModal({ users, currentUser, onAddUser, onUpdateUser, onDeleteUser, onSelectUser, onClose }) {
   // Create user form state
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -312,25 +312,40 @@ export default function UserManagementModal({ users, onAddUser, onUpdateUser, on
                   );
                 }
 
+                const isCurrent = currentUser?.id === u.id || currentUser?.name?.toUpperCase() === u.name?.toUpperCase();
+
                 return (
                   <div
                     key={u.id}
-                    className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition"
+                    className={`flex items-center justify-between p-3.5 rounded-xl border transition ${
+                      isCurrent
+                        ? 'bg-blue-950/30 border-blue-500/40'
+                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                    }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`h-9 w-9 rounded-xl border flex items-center justify-center font-black ${
+                    <div
+                      className="flex items-center gap-3 cursor-pointer group flex-1 mr-2"
+                      onClick={() => onSelectUser && onSelectUser(u)}
+                      title={`Hacer clic para ingresar al sistema como ${u.name}`}
+                    >
+                      <div className={`h-9 w-9 rounded-xl border flex items-center justify-center font-black group-hover:scale-105 transition ${
                         isAdminUser ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
                       }`}>
                         {u.name.charAt(0)}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-100">{u.name}</span>
+                          <span className="font-bold text-slate-100 group-hover:text-emerald-400 transition">{u.name}</span>
                           <span className={`rounded px-2 py-0.5 text-[10px] font-bold border ${
                             isAdminUser ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'
                           }`}>
                             {u.role === 'Secretario / Instructor' ? 'Secretario' : u.role}
                           </span>
+                          {isCurrent && (
+                            <span className="rounded px-2 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                              Sesión Actual
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono mt-0.5">
                           <span>Email/User: <strong className="text-slate-200">{u.email}</strong></span>
@@ -341,9 +356,25 @@ export default function UserManagementModal({ users, onAddUser, onUpdateUser, on
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {onSelectUser && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectUser(u)}
+                          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition shadow-md ${
+                            isCurrent
+                              ? 'bg-slate-800 text-slate-400 border border-slate-700 cursor-default'
+                              : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border border-emerald-500/50 shadow-emerald-950/40 active:scale-95'
+                          }`}
+                          title={isCurrent ? 'Sesión activa' : `Ingresar directamente como ${u.name}`}
+                        >
+                          <LogIn className="h-3.5 w-3.5" />
+                          <span>{isCurrent ? 'Actual' : 'Ingresar'}</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
-                        onClick={() => startEdit(u)}
+                        onClick={(e) => { e.stopPropagation(); startEdit(u); }}
                         className="flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 text-xs font-semibold transition"
                         title={`Editar datos y contraseña de ${u.name}`}
                       >
@@ -354,7 +385,7 @@ export default function UserManagementModal({ users, onAddUser, onUpdateUser, on
                       {!isAdminUser && (
                         <button
                           type="button"
-                          onClick={() => handleDeleteClick(u)}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteClick(u); }}
                           className="flex items-center gap-1.5 rounded-xl bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 hover:text-rose-300 transition"
                           title={`Eliminar usuario ${u.name}`}
                         >

@@ -616,9 +616,15 @@ export default function App() {
         {activePage === 'usuarios' && (currentUser?.role === 'Administrador General' || currentUser?.name?.toLowerCase().includes('marcote')) && (
           <UserManagementModal
             users={users}
+            currentUser={currentUser}
             onAddUser={handleAddUser}
             onUpdateUser={handleUpdateUser}
             onDeleteUser={handleDeleteUser}
+            onSelectUser={(u) => {
+              handleLogin(u);
+              setActivePage('causas');
+              setIsUserManagementOpen(false);
+            }}
             onClose={() => setActivePage('causas')}
           />
         )}
@@ -652,9 +658,15 @@ export default function App() {
       {isUserManagementOpen && (
         <UserManagementModal
           users={users}
+          currentUser={currentUser}
           onAddUser={handleAddUser}
           onUpdateUser={handleUpdateUser}
           onDeleteUser={handleDeleteUser}
+          onSelectUser={(u) => {
+            handleLogin(u);
+            setActivePage('causas');
+            setIsUserManagementOpen(false);
+          }}
           onClose={() => setIsUserManagementOpen(false)}
         />
       )}
