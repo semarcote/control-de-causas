@@ -930,7 +930,9 @@ export function renderBadgeEstado(estado, tramite = '', causa = null) {
 }
 
 export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDeleteCausa, onReabrirCausa, onSaveCausa }) {
-  if (causas.length === 0) {
+  const safeCausas = Array.isArray(causas) ? causas : [];
+
+  if (safeCausas.length === 0) {
     return (
       <div className="glass-panel flex flex-col items-center justify-center rounded-xl p-12 text-center border border-slate-800">
         <Clock className="h-12 w-12 text-slate-600 mb-3" />
@@ -962,7 +964,7 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60 bg-slate-950/40 text-slate-300">
-            {causas.map((causa) => {
+            {safeCausas.map((causa) => {
               const finalized = isFinalizedState(causa.estado, causa.tramite);
               const isAbuso = isAbusoSexual(causa.caratula, causa.tramite);
               const isAbusoEnTramite = isAbuso && !finalized;

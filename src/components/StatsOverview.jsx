@@ -3,7 +3,7 @@ import { Activity } from 'lucide-react';
 
 export default function StatsOverview({ causas, selectedFilter, onSelectFilter }) {
   // Count en tramite (causes active in instruction)
-  const enTramiteCount = causas.filter(c => {
+  const enTramiteCount = (causas || []).filter(c => {
     const st = (c.estado || '').toLowerCase();
     const tr = (c.tramite || '').toLowerCase();
     return st === 'en trámite' || st === 'en tramite' || st === 'esperar' || st === 'revisar' || (!st.includes('archiv') && !tr.includes('archivo') && !st.includes('elevad') && !st.includes('desestim') && !st.includes('sobrese') && !st.includes('incompet') && !st.includes('remis'));

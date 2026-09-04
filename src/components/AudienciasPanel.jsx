@@ -40,7 +40,7 @@ export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) 
   // Extract all audiencias from all active causes
   const allAudiencias = useMemo(() => {
     const list = [];
-    causas.forEach(causa => {
+    (causas || []).forEach(causa => {
       const auds = Array.isArray(causa.audiencias) ? causa.audiencias : [];
       auds.forEach((aud, idx) => {
         list.push({

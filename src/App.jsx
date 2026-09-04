@@ -238,8 +238,12 @@ export default function App() {
 
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
 
+  // Track which user's dataset is loaded in `causas` state
+  const [loadedUserKey, setLoadedUserKey] = useState(() => getUserStorageKey(currentUser));
+
   // Load dataset strictly from active user's key
   const [causas, setCausas] = useState(() => {
+    if (!currentUser) return [];
     const key = getUserStorageKey(currentUser);
     const saved = localStorage.getItem(key);
     if (saved) {
@@ -253,45 +257,54 @@ export default function App() {
 
   // Re-load dataset and fetch Google Sheets data strictly for current active user (Google Sheets is Single Source of Truth)
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      setCausas([]);
+      setLoadedUserKey('');
+      return;
+    }
 
-    const key = getUserStorageKey(currentUser);
-    const saved = localStorage.getItem(key);
+    const currentKey = getUserStorageKey(currentUser);
+    const targetUserName = (currentUser.name || '').trim().toUpperCase();
+
+    // 1. Immediately switch local causas state to cache of the target user
+    const saved = localStorage.getItem(currentKey);
+    let initialLocal = [];
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setCausas(parsed);
-        }
-      } catch (e) {
-        setCausas([]);
-      }
-    } else {
-      setCausas([]);
+        if (Array.isArray(parsed)) initialLocal = parsed;
+      } catch (e) {}
     }
+    setCausas(initialLocal);
+    setLoadedUserKey(currentKey);
 
-    // Fetch live dataset from active user's individual Google Sheets tab (Single Source of Truth)
+    // 2. Fetch live dataset strictly from target user's individual Google Sheets tab (Single Source of Truth)
     const url = getStoredSheetsUrl();
-    if (url) {
-      fetchCausasFromSheets(url, currentUser.name)
+    if (url && targetUserName) {
+      // Ensure target user's individual tab exists in Google Sheets
+      createUserSheetTab(url, currentUser).catch(() => {});
+
+      fetchCausasFromSheets(url, targetUserName)
         .then((remoteCausas) => {
           if (Array.isArray(remoteCausas)) {
             setCausas(remoteCausas);
-            localStorage.setItem(key, JSON.stringify(remoteCausas));
+            setLoadedUserKey(currentKey);
+            localStorage.setItem(currentKey, JSON.stringify(remoteCausas));
           }
         })
         .catch((err) => {
-          console.warn('Google Sheets fetch notice:', err);
+          console.warn('Google Sheets fetch notice for', targetUserName, err);
         });
     }
   }, [currentUser?.id, currentUser?.name]);
 
-  // Save to user-scoped localStorage on change
+  // Save to user-scoped localStorage ONLY when loadedUserKey matches active currentUser
   useEffect(() => {
     if (!currentUser) return;
-    const key = getUserStorageKey(currentUser);
-    localStorage.setItem(key, JSON.stringify(causas));
-  }, [causas, currentUser]);
+    const currentKey = getUserStorageKey(currentUser);
+    if (loadedUserKey !== currentKey) return; // Prevent cross-user data overwrite during session switches
+    localStorage.setItem(currentKey, JSON.stringify(causas));
+  }, [causas, currentUser, loadedUserKey]);
 
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');

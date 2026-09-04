@@ -33,7 +33,7 @@ export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, o
   const expirationEvents = useMemo(() => {
     const events = [];
 
-    causas.forEach(causa => {
+    (causas || []).forEach(causa => {
       // Exclude finalized/archived causes
       if (isFinalizedState(causa.estado, causa.tramite)) return;
 

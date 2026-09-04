@@ -744,8 +744,9 @@ async function postToAppsScript(url, data) {
 export async function fetchCausasFromSheets(url, userName = null) {
   if (!url) throw new Error('URL de Google Apps Script no configurada');
 
-  const queryUrl = userName ? `${url}?userName=${encodeURIComponent(userName)}` : url;
-  let rawList = [];
+  const targetUserName = userName ? String(userName).trim().toUpperCase() : null;
+  const queryUrl = targetUserName ? `${url}?userName=${encodeURIComponent(targetUserName)}` : url;
+  let rawList = null;
 
   // Primero probar método GET
   try {
@@ -760,8 +761,8 @@ export async function fetchCausasFromSheets(url, userName = null) {
     console.warn('GET fetch direct failed, trying POST fallback', e);
   }
 
-  if (!rawList || rawList.length === 0) {
-    const result = await postToAppsScript(url, { action: 'read', userName });
+  if (rawList === null) {
+    const result = await postToAppsScript(url, { action: 'read', userName: targetUserName });
     rawList = result.causas || [];
   }
 
@@ -780,10 +781,11 @@ export async function fetchCausasFromSheets(url, userName = null) {
  */
 export async function syncAllToSheets(url, causasArray, userName = null) {
   if (!url) throw new Error('URL de Google Apps Script no configurada');
+  const targetUserName = userName ? String(userName).trim().toUpperCase() : null;
   const result = await postToAppsScript(url, {
     action: 'sync',
     causas: causasArray,
-    userName
+    userName: targetUserName
   });
   updateLastSyncTime();
   return result;
@@ -794,10 +796,11 @@ export async function syncAllToSheets(url, causasArray, userName = null) {
  */
 export async function updateCausaInSheets(url, causa, userName = null) {
   if (!url) return null;
+  const targetUserName = userName ? String(userName).trim().toUpperCase() : null;
   const result = await postToAppsScript(url, {
     action: 'update',
     causa: causa,
-    userName
+    userName: targetUserName
   });
   updateLastSyncTime();
   return result;
@@ -808,10 +811,11 @@ export async function updateCausaInSheets(url, causa, userName = null) {
  */
 export async function createCausaInSheets(url, causa, userName = null) {
   if (!url) return null;
+  const targetUserName = userName ? String(userName).trim().toUpperCase() : null;
   const result = await postToAppsScript(url, {
     action: 'create',
     causa: causa,
-    userName
+    userName: targetUserName
   });
   updateLastSyncTime();
   return result;
@@ -822,11 +826,12 @@ export async function createCausaInSheets(url, causa, userName = null) {
  */
 export async function deleteCausaInSheets(url, id, ipp, userName = null) {
   if (!url) return null;
+  const targetUserName = userName ? String(userName).trim().toUpperCase() : null;
   const result = await postToAppsScript(url, {
     action: 'delete',
     id: id,
     ipp: ipp,
-    userName
+    userName: targetUserName
   });
   updateLastSyncTime();
   return result;
