@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Clock, FileText, Calendar, Edit3, Plus, Shield, MapPin, Gavel, CheckCircle2, AlertTriangle, Send, RotateCcw, Trash2, Unlock, UserCheck, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
+import { X, Clock, FileText, Calendar, Edit3, Plus, Shield, MapPin, Gavel, CheckCircle2, AlertTriangle, Send, RotateCcw, Trash2, Unlock, UserCheck, ChevronLeft, ChevronRight, ArrowRight, Activity } from 'lucide-react';
 import { renderBadgeEstado, isFinalizedState, isAbusoSexual, renderBadgePericia, renderMultiplePericiasBadges, renderBadgePP, calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, extractAndFormatDateFromActuacion, isDateInFuture, isValidDateString, INICIO_OPTIONS, formatDisplayDate, parseAnyDate, isPPMaxDaysExceeded } from './CausasTable';
 
 const monthNames = [
@@ -291,15 +291,29 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
     }
   };
 
-  const handleToggleFinalizarPericia = (idToToggle) => {
+  const handleSetPericiaEstado = (idToToggle, targetEstado) => {
     let periciaName = '';
-    let isNowDone = false;
+    let appliedEstado = '';
 
     const updatedPericias = periciasState.map(p => {
       if (p.id === idToToggle) {
-        isNowDone = !p.finalizada;
         periciaName = `${p.tipo} (${p.fecha})`;
-        return { ...p, finalizada: isNowDone };
+        const currentIsAgregada = p.finalizada || p.estado === 'agregada' || p.estado === 'cumplida';
+        const currentIsEnProceso = p.estado === 'en_proceso' || p.estado === 'en proceso';
+
+        if (targetEstado === 'agregada') {
+          appliedEstado = currentIsAgregada ? 'pendiente' : 'agregada';
+        } else if (targetEstado === 'en_proceso') {
+          appliedEstado = currentIsEnProceso ? 'pendiente' : 'en_proceso';
+        } else {
+          appliedEstado = targetEstado;
+        }
+
+        return {
+          ...p,
+          estado: appliedEstado,
+          finalizada: appliedEstado === 'agregada'
+        };
       }
       return p;
     });
@@ -308,7 +322,12 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
 
     // Generate timeline entry
     const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-    const timelineEntry = `${todayStr} Pericia ${isNowDone ? 'cumplida / finalizada' : 'reabierta / pendiente'}: ${periciaName}`;
+    let label = 'pendiente';
+    if (appliedEstado === 'agregada') label = 'agregada al expediente';
+    else if (appliedEstado === 'en_proceso') label = 'marcada en proceso';
+    else label = 'reabierta / pendiente';
+
+    const timelineEntry = `${todayStr} Pericia ${label}: ${periciaName}`;
 
     const updatedTramite = causa.tramite
       ? `${causa.tramite} /// ${timelineEntry}`
@@ -1027,40 +1046,58 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                         );
                       }
 
+                      const isAgregada = p.finalizada || p.estado === 'agregada' || p.estado === 'cumplida';
+                      const isEnProceso = p.estado === 'en_proceso' || p.estado === 'en proceso';
+
                       return (
-                        <div key={`${p.id}-${p.finalizada ? 'done' : 'pending'}`} className="flex items-center justify-between rounded-xl bg-slate-900 p-3 border border-slate-800 text-xs">
-                          <div className="flex items-center gap-2">
-                            {renderBadgePericia(p.fecha, p.tipo, p.finalizada)}
+                        <div key={`${p.id}-${p.estado || (p.finalizada ? 'done' : 'pending')}`} className="flex items-center justify-between rounded-xl bg-slate-900 p-3 border border-slate-800 text-xs gap-2">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            {renderBadgePericia(p.fecha, p.tipo, p.finalizada, p.estado)}
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <button
                               type="button"
                               onClick={() => handleStartEditPericia(p)}
-                              className="flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-300 border border-slate-700 hover:bg-blue-600/30 hover:text-blue-300 hover:border-blue-500/40 transition"
+                              className="flex items-center gap-1 rounded-lg bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-300 border border-slate-700 hover:bg-blue-600/30 hover:text-blue-300 hover:border-blue-500/40 transition"
                               title="Editar tipo o fecha de esta pericia"
                             >
                               <Edit3 className="h-3.5 w-3.5" />
-                              Editar
+                              <span>Editar</span>
                             </button>
 
                             <button
                               type="button"
-                              onClick={() => handleToggleFinalizarPericia(p.id)}
+                              onClick={() => handleSetPericiaEstado(p.id, 'en_proceso')}
                               className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold border transition ${
-                                p.finalizada
-                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                                isEnProceso
+                                  ? 'bg-purple-500/25 text-purple-300 border-purple-500/50 hover:bg-purple-500/35'
+                                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-purple-600/30 hover:text-purple-300'
+                              }`}
+                              title="Marcar pericia como En Proceso (se ocultará de los vencimientos de la pantalla principal)"
+                            >
+                              <Activity className="h-3.5 w-3.5 text-purple-400" />
+                              <span>En Proceso</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleSetPericiaEstado(p.id, 'agregada')}
+                              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold border transition ${
+                                isAgregada
+                                  ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/35'
                                   : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-emerald-600/30 hover:text-emerald-300'
                               }`}
+                              title="Marcar pericia como Agregada al expediente"
                             >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              {p.finalizada ? 'Cumplida' : 'Marcar Cumplida'}
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                              <span>Agregada</span>
                             </button>
 
                             <button
                               type="button"
                               onClick={() => handleRemovePericiaItem(p.id)}
-                              className="rounded-lg p-1.5 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition"
+                              className="rounded-lg p-1.5 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition ml-0.5"
                               title="Eliminar esta pericia"
                             >
                               <Trash2 className="h-4 w-4" />

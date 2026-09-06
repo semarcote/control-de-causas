@@ -86,8 +86,9 @@ export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, o
       }
 
       periciasList.forEach((p, idx) => {
-        // Exclude finalized/cumplidas pericias from alert panel
-        if (p.finalizada === true || p.estado === 'finalizada' || p.estado === 'cumplida') return;
+        // Exclude finalized/cumplidas/agregadas and en_proceso pericias from alert panel
+        const st = String(p.estado || '').toLowerCase().trim();
+        if (p.finalizada === true || st === 'finalizada' || st === 'cumplida' || st === 'agregada' || st === 'en_proceso' || st === 'en proceso') return;
 
         if (p.fecha) {
           const subDates = String(p.fecha).split(/[,;]/).map(d => d.trim()).filter(Boolean);
