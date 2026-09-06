@@ -359,6 +359,39 @@ export function formatCompactMultipleDates(dateParts) {
   return `${initialRaw} y ${lastRaw}`;
 }
 
+export function getPericiaColor(pericia_fecha) {
+  if (!pericia_fecha) return 'blue';
+  const str = String(pericia_fecha).trim();
+  if (!str || str === '-' || str === 'Sin fecha') return 'default';
+
+  const firstDateStr = str.split(/[,;]/)[0].trim();
+  const parsedDate = parseAnyDate(firstDateStr);
+
+  // Pericias del año 2027 o con fecha '27 -> Azul obligatoriamente
+  if (parsedDate && parsedDate.getFullYear() === 2027) {
+    return 'blue';
+  }
+
+  if (!parsedDate) return 'blue';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const target = new Date(parsedDate);
+  target.setHours(0, 0, 0, 0);
+
+  const diffTime = target.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 7) {
+    return 'red';
+  } else if (diffDays <= 30) {
+    return 'yellow';
+  } else {
+    return 'blue';
+  }
+}
+
 export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', finalizada = false) {
   if (finalizada) {
     return (
@@ -385,11 +418,12 @@ export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', fin
   const rawStr = String(pericia_fecha);
   const dateParts = rawStr.split(/[,;]/).map(d => d.trim()).filter(Boolean);
   const compactDateLabel = formatCompactMultipleDates(dateParts);
-  const lowDate = compactDateLabel.toLowerCase();
 
-  if (lowDate.includes('/08/') || lowDate.includes('/05/') || lowDate.includes('/06/') || lowDate.includes('/07/')) {
+  const color = getPericiaColor(pericia_fecha);
+
+  if (color === 'red') {
     return (
-      <span key={`badge-urgent-${compactDateLabel}`} className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-xs font-bold text-rose-300 border border-rose-500/40 glow-urgent whitespace-nowrap" title={pericia_detalle || 'Pericia Vencida / Pendiente'}>
+      <span key={`badge-urgent-${compactDateLabel}`} className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-xs font-bold text-rose-300 border border-rose-500/40 glow-urgent whitespace-nowrap" title={pericia_detalle || 'Pericia por vencer en los próximos 7 días o vencida'}>
         <AlertTriangle className="h-3 w-3 text-rose-400 shrink-0" />
         {compactDateLabel}
         {pericia_detalle && <span className="ml-0.5 text-[10px] text-rose-200/80 font-normal">({pericia_detalle})</span>}
@@ -397,9 +431,9 @@ export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', fin
     );
   }
 
-  if (lowDate.includes('/09/')) {
+  if (color === 'yellow') {
     return (
-      <span key={`badge-next-${compactDateLabel}`} className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300 border border-amber-500/40 whitespace-nowrap" title={pericia_detalle}>
+      <span key={`badge-next-${compactDateLabel}`} className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300 border border-amber-500/40 whitespace-nowrap" title={pericia_detalle || 'Pericia a vencer entre 8 y 30 días'}>
         <Clock className="h-3 w-3 text-amber-400 shrink-0" />
         {compactDateLabel}
         {pericia_detalle && <span className="ml-0.5 text-[10px] text-amber-200/80 font-normal">({pericia_detalle})</span>}
@@ -407,8 +441,9 @@ export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', fin
     );
   }
 
+  // Blue (default for > 30 days or year 2027)
   return (
-    <span key={`badge-future-${compactDateLabel}`} className="inline-flex items-center gap-1 rounded bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-300 border border-blue-500/30 whitespace-nowrap" title={pericia_detalle}>
+    <span key={`badge-future-${compactDateLabel}`} className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-300 border border-blue-500/40 whitespace-nowrap" title={pericia_detalle || 'Pericia a más de 30 días o año 2027'}>
       <Calendar className="h-3 w-3 text-blue-400 shrink-0" />
       {compactDateLabel}
       {pericia_detalle && <span className="ml-0.5 text-[10px] text-blue-200/80 font-normal">({pericia_detalle})</span>}
