@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { X, Plus, Scale, FileText, Unlock, UserCheck, AlertTriangle } from 'lucide-react';
-import { calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, formatCaratulaMask, isDateInFuture, isValidDateString, INICIO_OPTIONS, isPPMaxDaysExceeded } from './CausasTable';
+import { calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, formatCaratulaMask, isDateInFuture, isValidDateString, INICIO_OPTIONS, isPPMaxDaysExceeded, calculate4MonthsIPPDate } from './CausasTable';
 
 export default function NewCausaModal({ onClose, onCreate }) {
   const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -21,6 +21,8 @@ export default function NewCausaModal({ onClose, onCreate }) {
     flagrancia: 'NO',
     fecha_flagrancia: '',
     flagrancia_prorrogada: false,
+    indagatoria: 'NO',
+    fecha_indagatoria: '',
     detenido: 'NO',
     fecha_detencion: '',
     vencimiento_pp1: '',
@@ -87,6 +89,9 @@ export default function NewCausaModal({ onClose, onCreate }) {
     const autoSumario = normInicio === 'mesa' || normInicio === 'mail' || normInicio === 'ciudadana';
 
     const isDet = formData.detenido === 'SI';
+    const isInd = (formData.indagatoria === 'SI' || formData.indagatoria === 'SÍ') && !!formData.fecha_indagatoria;
+    const calculatedIPP = isInd ? calculate4MonthsIPPDate(formData.fecha_indagatoria) : (formData.vencimiento_ipp || '');
+
     onCreate({
       ...formData,
       fecha_inicio: todayStr,
@@ -94,6 +99,9 @@ export default function NewCausaModal({ onClose, onCreate }) {
       vencimiento_pp1: isDet ? formData.vencimiento_pp1 : '',
       vencimiento_pp2: isDet ? formData.vencimiento_pp2 : '',
       pp_prorrogada: isDet ? formData.pp_prorrogada : false,
+      indagatoria: isInd ? 'SI' : 'NO',
+      fecha_indagatoria: isInd ? formData.fecha_indagatoria : '',
+      vencimiento_ipp: calculatedIPP,
       ipp: fullFormattedIPP,
       sumario: autoSumario ? 'SÍ' : formData.sumario,
       id: `causa-custom-${Date.now()}`
@@ -280,6 +288,66 @@ export default function NewCausaModal({ onClose, onCreate }) {
                 <option value="SI">SÍ</option>
               </select>
             </div>
+
+            <div>
+              <label className="block font-semibold text-slate-300 mb-1">¿Tiene Imputado con Indagatoria?</label>
+              <select
+                value={formData.indagatoria || 'NO'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData(prev => ({
+                    ...prev,
+                    indagatoria: val,
+                    fecha_indagatoria: val === 'NO' ? '' : prev.fecha_indagatoria,
+                    vencimiento_ipp: val === 'NO' ? '' : prev.vencimiento_ipp
+                  }));
+                }}
+                className="w-full rounded-xl bg-slate-950 p-2.5 text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="NO">NO</option>
+                <option value="SI">SÍ</option>
+              </select>
+            </div>
+
+            {/* Fecha de Indagatoria en Alta de Causa */}
+            {(formData.indagatoria === 'SI' || formData.indagatoria === 'SÍ') && (() => {
+              const calculatedVencIPP = calculate4MonthsIPPDate(formData.fecha_indagatoria);
+              return (
+                <div className="col-span-2 rounded-xl p-3.5 border border-amber-500/30 bg-amber-500/10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block font-bold text-amber-400 text-xs">
+                      📅 Fecha de Indagatoria (DD/MM/AA)
+                    </label>
+                    <span className="text-[10px] text-amber-300/80 font-medium">
+                      Calcula Vencimiento IPP (+4 meses) automáticamente
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Ej. 06/09/26"
+                    value={formData.fecha_indagatoria || ''}
+                    onChange={(e) => {
+                      const val = formatDateMask(e.target.value);
+                      const calculated = calculate4MonthsIPPDate(val);
+                      setFormData(prev => ({
+                        ...prev,
+                        fecha_indagatoria: val,
+                        vencimiento_ipp: calculated
+                      }));
+                    }}
+                    className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-amber-500/40 focus:border-amber-400 focus:outline-none font-mono"
+                  />
+                  {formData.fecha_indagatoria && (
+                    <div className="flex items-center gap-2 pt-1 text-xs">
+                      <span className="text-slate-300">⚡ Vencimiento IPP (+4 meses corridos):</span>
+                      <span className="font-mono font-bold text-amber-200 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40 underline">
+                        {calculatedVencIPP || 'ingresando fecha...'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Fecha de Flagrancia & Prórroga en Alta de Causa */}
             {(formData.flagrancia === 'SI' || formData.flagrancia === 'SÍ') && (() => {

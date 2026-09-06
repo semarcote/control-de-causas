@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, Clock, FileText, Calendar, Edit3, Plus, Shield, MapPin, Gavel, CheckCircle2, AlertTriangle, Send, RotateCcw, Trash2, Unlock, UserCheck, ChevronLeft, ChevronRight, ArrowRight, Activity } from 'lucide-react';
-import { renderBadgeEstado, isFinalizedState, isAbusoSexual, renderBadgePericia, renderMultiplePericiasBadges, renderBadgePP, calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, extractAndFormatDateFromActuacion, isDateInFuture, isValidDateString, INICIO_OPTIONS, formatDisplayDate, parseAnyDate, isPPMaxDaysExceeded } from './CausasTable';
+import { renderBadgeEstado, isFinalizedState, isAbusoSexual, renderBadgePericia, renderMultiplePericiasBadges, renderBadgePP, calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, extractAndFormatDateFromActuacion, isDateInFuture, isValidDateString, INICIO_OPTIONS, formatDisplayDate, parseAnyDate, isPPMaxDaysExceeded, calculate4MonthsIPPDate } from './CausasTable';
 
 const monthNames = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -29,6 +29,8 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
   const [fechaFlagranciaState, setFechaFlagranciaState] = useState(formatDisplayDate(causa.fecha_flagrancia) || '');
   const [flagranciaProrrogadaState, setFlagranciaProrrogadaState] = useState(causa.flagrancia_prorrogada === true || causa.flagrancia_prorrogada === 'SI');
   const [fechaDetencionState, setFechaDetencionState] = useState(formatDisplayDate(causa.fecha_detencion) || '');
+  const [indagatoriaState, setIndagatoriaState] = useState(causa.indagatoria === 'SI' || causa.indagatoria === 'SÍ' || !!causa.fecha_indagatoria ? 'SI' : 'NO');
+  const [fechaIndagatoriaState, setFechaIndagatoriaState] = useState(formatDisplayDate(causa.fecha_indagatoria) || '');
   const rawPP1 = causa.vencimiento_pp1 || causa.vencimiento_pp || causa.estado_pp || '';
   const initialSpecialPP = checkPPStatusSpecial(rawPP1);
   const [vencPP1State, setVencPP1State] = useState(initialSpecialPP || formatDisplayDate(rawPP1) || '');
@@ -548,6 +550,9 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
     const formattedPP2 = formatDisplayDate(calculatedPP2);
     const formattedVencIPP = formatDisplayDate(finalVencIPP);
 
+    const isIndagado = (indagatoriaState === 'SI' || indagatoriaState === 'SÍ') && !!fechaIndagatoriaState;
+    const calculatedIndagatoriaIPP = isIndagado ? calculate4MonthsIPPDate(fechaIndagatoriaState) : '';
+
     const updatedCausa = {
       ...formData,
       sumario: (sumarioState === 'SÍ' || sumarioState === 'SI') ? (formData.sumario?.trim() && formData.sumario.trim().toLowerCase() !== 'no' && formData.sumario.trim().toLowerCase() !== 'si' && formData.sumario.trim().toLowerCase() !== 'sí' ? formData.sumario : 'SÍ') : 'NO',
@@ -562,7 +567,9 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
       vencimiento_pp2: isDetenido ? formattedPP2 : '',
       estado_pp: isDetenido ? (specialStatus || formattedVencPP1 || '') : '',
       pp_prorrogada: isDetenido ? ppProrrogadaState : false,
-      vencimiento_ipp: (flagranciaState === 'NO' ? '' : ((formattedVencIPP && !checkPPStatusSpecial(formattedVencIPP)) ? formattedVencIPP : '')),
+      indagatoria: isIndagado ? 'SI' : 'NO',
+      fecha_indagatoria: isIndagado ? formatDisplayDate(fechaIndagatoriaState) : '',
+      vencimiento_ipp: isIndagado ? calculatedIndagatoriaIPP : (flagranciaState === 'NO' ? '' : ((formattedVencIPP && !checkPPStatusSpecial(formattedVencIPP)) ? formattedVencIPP : '')),
       revisar_dias: newPlazoDias,
       revisado: todayStr,
       tramite: updatedTramite
@@ -1905,15 +1912,51 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block font-semibold text-slate-300 mb-1">
-                        Vencimiento IPP
+                        ¿Tiene Imputado con Indagatoria?
                       </label>
-                      <input
-                        type="text"
-                        placeholder="Ej. 19/09/26"
-                        value={vencIPPState}
-                        onChange={(e) => setVencIPPState(formatDateMask(e.target.value))}
+                      <select
+                        value={indagatoriaState}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setIndagatoriaState(val);
+                          if (val === 'NO') {
+                            setFechaIndagatoriaState('');
+                          }
+                        }}
                         className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
-                      />
+                      >
+                        <option value="NO">NO</option>
+                        <option value="SI">SÍ</option>
+                      </select>
+
+                      {/* Casillero Fecha de Indagatoria (Visible si Indagatoria = SI) */}
+                      {(indagatoriaState === 'SI' || indagatoriaState === 'SÍ') && (() => {
+                        const calculatedVencIPP = calculate4MonthsIPPDate(fechaIndagatoriaState);
+                        return (
+                          <div className="rounded-xl p-3 border border-amber-500/30 bg-amber-500/10 space-y-2 mt-2">
+                            <div className="flex items-center justify-between">
+                              <label className="block font-bold text-amber-400 text-xs">
+                                📅 Fecha de Indagatoria (DD/MM/AA)
+                              </label>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Ej. 06/09/26"
+                              value={fechaIndagatoriaState}
+                              onChange={(e) => setFechaIndagatoriaState(formatDateMask(e.target.value))}
+                              className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-amber-500/40 focus:border-amber-400 focus:outline-none font-mono"
+                            />
+                            {fechaIndagatoriaState && (
+                              <div className="flex flex-col gap-0.5 pt-1 text-xs">
+                                <span className="text-slate-300 text-[11px]">⚡ Vencimiento IPP (+4 meses):</span>
+                                <span className="font-mono font-bold text-amber-200 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40 self-start">
+                                  {calculatedVencIPP || 'ingresando fecha...'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div>

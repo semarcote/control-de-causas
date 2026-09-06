@@ -169,8 +169,41 @@ export function formatDisplayDate(val) {
   return '';
 }
 
+export function calculate4MonthsIPPDate(dateInput) {
+  if (!dateInput) return '';
+  const str = String(dateInput).trim();
+  if (!str || str === '-' || str === 'Sin fecha') return '';
+
+  const parsed = parseAnyDate(str);
+  if (!parsed) return '';
+
+  const d = parsed.getDate();
+  const m = parsed.getMonth(); // 0-indexed
+  const y = parsed.getFullYear();
+
+  // Target month is month + 4
+  const targetDate = new Date(y, m + 4, d);
+
+  // If day overflowed into next month (e.g. Oct 31 -> Feb 28), clamp to last day of target month
+  if (targetDate.getDate() !== d) {
+    targetDate.setDate(0);
+  }
+
+  const dayStr = String(targetDate.getDate()).padStart(2, '0');
+  const monthStr = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const yearStr = String(targetDate.getFullYear()).slice(-2);
+
+  return `${dayStr}/${monthStr}/${yearStr}`;
+}
+
 export function getVencimientoIPP(causa) {
-  if (!causa || !causa.vencimiento_ipp) return '';
+  if (!causa) return '';
+  if (causa.indagatoria === 'NO') return '';
+  if (causa.fecha_indagatoria) {
+    const calculated = calculate4MonthsIPPDate(causa.fecha_indagatoria);
+    if (calculated) return calculated;
+  }
+  if (!causa.vencimiento_ipp) return '';
   const str = String(causa.vencimiento_ipp).trim();
   return formatDisplayDate(str);
 }
