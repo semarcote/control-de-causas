@@ -1,18 +1,44 @@
-// Gemini Service for Control de Causas MPBA
-// Handles Google Gemini API calls, Function Calling (Tools), and execution against local app state.
+// Gemini Service for Control de Causas MPBA - Multi-User Scoped
+// Handles Google Gemini API calls, Function Calling (Tools), and user-scoped API key/history storage.
 
-const GEMINI_KEY_STORAGE = 'control_causas_gemini_api_key';
-
-export function getStoredGeminiApiKey() {
-  return localStorage.getItem(GEMINI_KEY_STORAGE) || import.meta.env.VITE_GEMINI_API_KEY || '';
+function getUserStorageKey(user, prefix) {
+  const uName = (user?.name || user?.id || 'default').trim().toLowerCase().replace(/\s+/g, '_');
+  return `${prefix}_${uName}`;
 }
 
-export function setStoredGeminiApiKey(key) {
-  if (!key) {
-    localStorage.removeItem(GEMINI_KEY_STORAGE);
+export function getStoredGeminiApiKey(user) {
+  const key = getUserStorageKey(user, 'control_causas_gemini_key');
+  return localStorage.getItem(key) || localStorage.getItem('control_causas_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
+}
+
+export function setStoredGeminiApiKey(user, apiKey) {
+  const key = getUserStorageKey(user, 'control_causas_gemini_key');
+  if (!apiKey) {
+    localStorage.removeItem(key);
   } else {
-    localStorage.setItem(GEMINI_KEY_STORAGE, key.trim());
+    localStorage.setItem(key, apiKey.trim());
   }
+}
+
+export function getStoredGeminiHistory(user) {
+  try {
+    const key = getUserStorageKey(user, 'control_causas_gemini_history');
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function setStoredGeminiHistory(user, history) {
+  try {
+    const key = getUserStorageKey(user, 'control_causas_gemini_history');
+    if (!history || history.length === 0) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, JSON.stringify(history.slice(-30))); // Keep last 30 messages
+    }
+  } catch (e) {}
 }
 
 // Function declarations (Tools) for Gemini
@@ -267,18 +293,20 @@ export function executeGeminiTool(toolCall, causas) {
 }
 
 // Main execution API for Gemini Assistant
-export async function sendPromptToGemini(userPrompt, conversationHistory = [], causas = [], apiKey = '') {
-  const key = apiKey || getStoredGeminiApiKey();
+export async function sendPromptToGemini(userPrompt, conversationHistory = [], causas = [], apiKey = '', currentUser = null) {
+  const key = apiKey || getStoredGeminiApiKey(currentUser);
   if (!key) {
     throw new Error('API_KEY_MISSING');
   }
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
 
+  const userNameStr = currentUser?.name ? ` (Usuario: ${currentUser.name})` : '';
+
   const systemInstruction = {
     parts: [
       {
-        text: `Eres el Asistente Inteligente de la Unidad Funcional de Instrucción (UFI) del Ministerio Público Fiscal de Buenos Aires (MPBA).
+        text: `Eres el Asistente Inteligente de la Unidad Funcional de Instrucción (UFI) del Ministerio Público Fiscal de Buenos Aires (MPBA)${userNameStr}.
 Tu rol es asistir a los instructores y fiscales a buscar causas, consultar vencimientos procesales (IPP a 4 meses de indagatoria, Prisión Preventiva a 15 y 30 días), registrar audiencias, actualizar el estado de pericias e imputados detenidos.
 Responde siempre de forma profesional, clara, concisa y cortés en español.
 Usa markdown (negritas, listas, tablas) para presentar la información procesal de manera limpia.

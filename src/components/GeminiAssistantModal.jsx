@@ -1,35 +1,53 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, Send, X, Bot, User, Key, CheckCircle, AlertTriangle, RefreshCw, Calendar, Search, ShieldAlert, ArrowRight, CornerDownLeft } from 'lucide-react';
-import { getStoredGeminiApiKey, setStoredGeminiApiKey, sendPromptToGemini } from '../services/geminiService';
+import { getStoredGeminiApiKey, setStoredGeminiApiKey, getStoredGeminiHistory, setStoredGeminiHistory, sendPromptToGemini } from '../services/geminiService';
 import { formatDisplayDate, calculate4MonthsIPPDate } from './CausasTable';
 
-export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onSaveCausa, onSelectCausa }) {
-  const [apiKey, setApiKey] = useState(getStoredGeminiApiKey());
+export default function GeminiAssistantModal({ isOpen, onClose, causas = [], currentUser, onSaveCausa, onSelectCausa }) {
+  const [apiKey, setApiKey] = useState('');
   const [tempApiKey, setTempApiKey] = useState('');
   const [showConfig, setShowConfig] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      text: '¡Hola! Soy tu **Asistente Inteligente Gemini** para el Control de Causas MPBA.\n\nPuedo ayudarte a buscar expedientes, consultar próximos vencimientos (IPP a 4 meses, Prisión Preventiva, Pericias), registrar nuevas audiencias o generar un resumen procesal.',
-      timestamp: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
   const messagesEndRef = useRef(null);
 
+  // Sync state when currentUser or isOpen changes
   useEffect(() => {
-    if (isOpen) {
-      const currentKey = getStoredGeminiApiKey();
+    if (isOpen && currentUser) {
+      const currentKey = getStoredGeminiApiKey(currentUser);
       setApiKey(currentKey);
       setTempApiKey(currentKey);
+
+      const storedHistory = getStoredGeminiHistory(currentUser);
+      if (storedHistory && storedHistory.length > 0) {
+        setMessages(storedHistory);
+      } else {
+        setMessages([
+          {
+            id: 'welcome',
+            role: 'assistant',
+            text: `¡Hola **${currentUser.name || 'Usuario'}**! Soy tu **Asistente Inteligente Gemini** personal para el Control de Causas MPBA.\n\nPuedo ayudarte a buscar expedientes, consultar próximos vencimientos (IPP a 4 meses, Prisión Preventiva, Pericias), registrar nuevas audiencias o generar un resumen procesal.`,
+            timestamp: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      }
+
       if (!currentKey) {
         setShowConfig(true);
+      } else {
+        setShowConfig(false);
       }
     }
-  }, [isOpen]);
+  }, [isOpen, currentUser?.id, currentUser?.name]);
+
+  // Save history on changes
+  useEffect(() => {
+    if (currentUser && messages.length > 0) {
+      setStoredGeminiHistory(currentUser, messages);
+    }
+  }, [messages, currentUser?.id, currentUser?.name]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -39,7 +57,7 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
 
   const handleSaveKey = (e) => {
     e.preventDefault();
-    setStoredGeminiApiKey(tempApiKey);
+    setStoredGeminiApiKey(currentUser, tempApiKey);
     setApiKey(tempApiKey.trim());
     setApiError('');
     setShowConfig(false);
@@ -75,7 +93,7 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
           parts: [{ text: m.text }]
         }));
 
-      const res = await sendPromptToGemini(textToSend.trim(), history, causas, apiKey);
+      const res = await sendPromptToGemini(textToSend.trim(), history, causas, apiKey, currentUser);
 
       const assistantMsg = {
         id: `a-${Date.now()}`,
@@ -90,7 +108,7 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
     } catch (err) {
       console.error('Gemini error:', err);
       if (err.message === 'API_KEY_MISSING' || err.message === 'API_KEY_INVALID') {
-        setApiError('Clave API invalidad o ausente. Ingrese su clave de API de Google Gemini para continuar.');
+        setApiError('Clave API inválida o ausente. Ingrese su clave de API de Google Gemini para continuar.');
         setShowConfig(true);
       } else {
         setMessages(prev => [
@@ -126,14 +144,14 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
         fecha: formatDisplayDate(args.fecha || todayStr),
         hora: args.hora || '10:00',
         tipo: args.tipo || 'Audiencia Procesal',
-        observaciones: args.observaciones || 'Registrada por Asistente Gemini IA',
+        observaciones: args.observaciones || `Registrada vía Gemini IA por ${currentUser?.name || 'Usuario'}`,
         estado: 'Pendiente'
       };
 
       const existingAuds = Array.isArray(causa.audiencias) ? causa.audiencias : [];
       const updatedAuds = [...existingAuds, newAud];
 
-      const entry = `${todayStr} Audiencia registrada vía Gemini IA: ${newAud.tipo} para el ${newAud.fecha} a las ${newAud.hora} hs`;
+      const entry = `${todayStr} Audiencia registrada vía Gemini IA (${currentUser?.name || 'Usuario'}): ${newAud.tipo} para el ${newAud.fecha} a las ${newAud.hora} hs`;
       const updatedTramite = causa.tramite ? `${causa.tramite} /// ${entry}` : entry;
 
       const updatedCausa = {
@@ -177,7 +195,7 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
       }
 
       const activeP = updatedPericias.find(p => !p.finalizada && p.estado !== 'agregada') || updatedPericias[0];
-      const entry = `${todayStr} Pericia actualizada vía Gemini IA (${targetState}): ${args.periciaIdOrTipo || 'Procesal'}`;
+      const entry = `${todayStr} Pericia actualizada vía Gemini IA (${currentUser?.name || 'Usuario'} - ${targetState}): ${args.periciaIdOrTipo || 'Procesal'}`;
       const updatedTramite = causa.tramite ? `${causa.tramite} /// ${entry}` : entry;
 
       const updatedCausa = {
@@ -202,7 +220,7 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
       const fInd = isInd ? formatDisplayDate(args.fechaIndagatoria || todayStr) : '';
       const vIPP = isInd ? calculate4MonthsIPPDate(fInd) : causa.vencimiento_ipp;
 
-      const entry = `${todayStr} Actualización vía Gemini IA: ${args.observacion || 'Modificación de estado/detenido/indagatoria'}`;
+      const entry = `${todayStr} Actualización vía Gemini IA (${currentUser?.name || 'Usuario'}): ${args.observacion || 'Modificación de estado/detenido/indagatoria'}`;
       const updatedTramite = causa.tramite ? `${causa.tramite} /// ${entry}` : entry;
 
       const updatedCausa = {
@@ -225,6 +243,19 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
     }
   };
 
+  const handleClearHistory = () => {
+    const freshMessages = [
+      {
+        id: 'welcome',
+        role: 'assistant',
+        text: `¡Conversación reiniciada para **${currentUser?.name || 'Usuario'}**! ¿En qué puedo ayudarte hoy?`,
+        timestamp: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+      }
+    ];
+    setMessages(freshMessages);
+    setStoredGeminiHistory(currentUser, freshMessages);
+  };
+
   const quickPrompts = [
     { label: '🔍 Causas con detenido', prompt: 'Buscar causas con imputado detenido' },
     { label: '📅 ¿Qué audiencias hay?', prompt: '¿Qué audiencias están programadas próximamente?' },
@@ -244,12 +275,12 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
             </div>
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                Asistente Inteligente Gemini
+                Asistente Gemini • <span className="text-purple-300">{currentUser?.name || 'Usuario'}</span>
                 <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] font-extrabold text-purple-300 border border-purple-500/30">
-                  AI v2.5
+                  AI Personal
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">Consultas, registro de audiencias y vencimientos en lenguaje natural</p>
+              <p className="text-xs text-slate-400">Módulo Gemini IA exclusivo para {currentUser?.name || 'este usuario'}</p>
             </div>
           </div>
 
@@ -261,21 +292,16 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
                   ? 'bg-slate-900 text-emerald-400 border-emerald-500/40 hover:bg-slate-800'
                   : 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
               }`}
-              title="Configuración de Clave API Gemini"
+              title="Configurar Clave API Gemini del Usuario"
             >
               <Key className="h-3.5 w-3.5" />
-              <span>{apiKey ? 'API Conectada' : 'Configurar Clave API'}</span>
+              <span>{apiKey ? 'API Conectada' : 'Registrar Clave API'}</span>
             </button>
 
             <button
-              onClick={() => setMessages([{
-                id: 'welcome',
-                role: 'assistant',
-                text: '¡Conversación reiniciada! ¿En qué puedo ayudarte hoy?',
-                timestamp: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-              }])}
+              onClick={handleClearHistory}
               className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-xl transition"
-              title="Reiniciar chat"
+              title="Limpiar chat de este usuario"
             >
               <RefreshCw className="h-4 w-4" />
             </button>
@@ -295,9 +321,9 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
             <div className="flex items-start gap-2.5">
               <Key className="h-4 w-4 text-purple-400 mt-0.5 shrink-0" />
               <div>
-                <h3 className="font-bold text-white">Configuración de Google Gemini API Key</h3>
+                <h3 className="font-bold text-white">Registro de Gemini API Key para {currentUser?.name || 'este Usuario'}</h3>
                 <p className="text-slate-400">
-                  Ingresa tu clave de la API de Google Gemini (puedes obtener una gratis en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline">Google AI Studio</a>). Se guardará de forma segura en tu navegador.
+                  Ingresa la clave de API de Google Gemini para el perfil de <strong>{currentUser?.name || 'tu usuario'}</strong>. Se guardará de forma privada e independiente en tu equipo. Obtén una clave gratis en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline">Google AI Studio</a>.
                 </p>
               </div>
             </div>
@@ -314,7 +340,7 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
                 type="submit"
                 className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition shadow-lg shadow-purple-600/30 shrink-0"
               >
-                Guardar Clave
+                Guardar Clave del Usuario
               </button>
               {apiKey && (
                 <button
@@ -376,7 +402,7 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
                     <div className="mt-3 p-3 rounded-xl bg-purple-950/40 border border-purple-500/40 space-y-2.5 text-xs text-slate-200">
                       <div className="flex items-center gap-2 font-bold text-purple-300">
                         <ShieldAlert className="h-4 w-4 text-purple-400" />
-                        <span>Confirmación Requerida</span>
+                        <span>Confirmación Requerida ({currentUser?.name})</span>
                       </div>
                       <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800 space-y-1 font-mono text-[11px]">
                         <div><span className="text-slate-400">Acción:</span> <strong className="text-purple-300">{m.proposal.actionName}</strong></div>
@@ -440,7 +466,7 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
               </div>
               <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800 flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping"></span>
-                <span>Gemini procesando tu consulta procesal...</span>
+                <span>Gemini procesando la consulta procesal para {currentUser?.name}...</span>
               </div>
             </div>
           )}
@@ -461,7 +487,7 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], onS
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Escribe tu consulta o instrucción (ej: buscar causa IBAÑEZ, ver vencimientos...)"
+              placeholder={`Escribe tu consulta (${currentUser?.name || 'Usuario'})... ej: buscar causas con detenido`}
               disabled={isLoading}
               className="flex-1 bg-transparent text-slate-100 placeholder-slate-500 text-xs focus:outline-none"
             />

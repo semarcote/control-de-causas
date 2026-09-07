@@ -681,6 +681,7 @@ export default function App() {
         isOpen={isGeminiOpen}
         onClose={() => setIsGeminiOpen(false)}
         causas={causas}
+        currentUser={currentUser}
         onSaveCausa={handleSaveCausa}
         onSelectCausa={(causa) => {
           setSelectedCausa(causa);
