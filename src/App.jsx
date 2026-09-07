@@ -7,7 +7,7 @@ import CausaModal from './components/CausaModal';
 import NewCausaModal from './components/NewCausaModal';
 import LoginScreen from './components/LoginScreen';
 import UserManagementModal from './components/UserManagementModal';
-import ExpirationPanel, { getDaysRemaining } from './components/ExpirationPanel';
+import ExpirationPanel, { getDaysRemaining, getExpirationEvents } from './components/ExpirationPanel';
 import AudienciasPanel from './components/AudienciasPanel';
 import {
   getStoredSheetsUrl,
@@ -507,24 +507,10 @@ export default function App() {
 
   const [activePage, setActivePage] = useState('causas'); // 'causas' | 'vencimientos' | 'usuarios'
 
-  // Count urgent expirations (<= 15 days)
+  // Count urgent expirations (<= 15 days) using exact expiration events logic
   const urgentVencimientosCount = useMemo(() => {
-    let count = 0;
-    causas.forEach(c => {
-      if (isFinalizedState(c.estado, c.tramite)) return;
-      const dates = [
-        c.vencimiento_pp2, c.vencimiento_pp1, c.vencimiento_pp,
-        c.vencimiento_ipp,
-        ...(Array.isArray(c.pericias) ? c.pericias.map(p => p.fecha) : [c.pericia_fecha])
-      ];
-      if (dates.some(d => {
-        const days = getDaysRemaining(d);
-        return days !== null && days <= 15;
-      })) {
-        count++;
-      }
-    });
-    return count;
+    const events = getExpirationEvents(causas);
+    return events.filter(e => e.days <= 15).length;
   }, [causas]);
 
   // Count upcoming/pending audiencias

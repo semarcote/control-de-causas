@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Calendar, AlertTriangle, Clock, ChevronDown, ChevronUp, ShieldAlert, ArrowRight, ExternalLink, Filter } from 'lucide-react';
-import { isFinalizedState, renderBadgePP, renderBadgeEstado, renderBadgePericia, formatDisplayDate, checkPPStatusSpecial } from './CausasTable';
+import { isFinalizedState, renderBadgePP, renderBadgeEstado, renderBadgePericia, formatDisplayDate, checkPPStatusSpecial, getVencimientoIPP } from './CausasTable';
 
 // Helper to calculate days remaining from DD/MM/YY, DD/MM/YYYY or GMT Date strings
 export function getDaysRemaining(dateStr) {
@@ -25,92 +25,97 @@ export function getDaysRemaining(dateStr) {
   return diffDays;
 }
 
+// Extract all expiration events from active causes
+export function getExpirationEvents(causas) {
+  const events = [];
+
+  (causas || []).forEach(causa => {
+    // Exclude finalized/archived causes
+    if (isFinalizedState(causa.estado, causa.tramite)) return;
+
+    // 1. PP Expiration (1º or 2º) - Solo si el imputado está detenido o con estado especial "Presentada"
+    const isDetenido = causa.detenido === 'SI' || causa.detenido === 'SÍ';
+    const rawPPVal = causa.estado_pp || causa.vencimiento_pp1 || causa.vencimiento_pp || '';
+    const isPresentada = String(rawPPVal).trim().toLowerCase().includes('presentad');
+
+    if (isDetenido || isPresentada) {
+      const isProrrogada = causa.pp_prorrogada === true || causa.pp_prorrogada === 'SI';
+      const vPP = isProrrogada
+        ? (causa.vencimiento_pp2 || causa.vencimiento_pp1 || causa.vencimiento_pp)
+        : (causa.vencimiento_pp1 || causa.vencimiento_pp);
+
+      if (vPP && !checkPPStatusSpecial(vPP)) {
+        const days = getDaysRemaining(vPP);
+        if (days !== null) {
+          events.push({
+            id: `pp-${causa.id}`,
+            causa,
+            tipo: isProrrogada ? '2º Vencimiento PP (Prórroga)' : '1º Vencimiento PP',
+            categoria: 'PP',
+            fecha: vPP,
+            days
+          });
+        }
+      }
+    }
+
+    // 2. IPP Expiration
+    const ippDate = getVencimientoIPP(causa);
+    if (ippDate && !checkPPStatusSpecial(ippDate)) {
+      const days = getDaysRemaining(ippDate);
+      if (days !== null) {
+        events.push({
+          id: `ipp-${causa.id}`,
+          causa,
+          tipo: 'Vencimiento IPP',
+          categoria: 'IPP',
+          fecha: ippDate,
+          days
+        });
+      }
+    }
+
+    // 3. Pericias Expirations
+    const periciasList = Array.isArray(causa.pericias) ? [...causa.pericias] : [];
+    if (periciasList.length === 0 && causa.pericia_fecha) {
+      periciasList.push({ tipo: causa.pericia_detalle || 'Pericia', fecha: causa.pericia_fecha, estado: causa.pericia_estado || '' });
+    }
+
+    periciasList.forEach((p, idx) => {
+      // Exclude finalized/cumplidas/agregadas and en_proceso pericias from alert panel
+      const st = String(p.estado || '').toLowerCase().trim();
+      if (p.finalizada === true || st === 'finalizada' || st === 'cumplida' || st === 'agregada' || st === 'en_proceso' || st === 'en proceso') return;
+
+      if (p.fecha) {
+        const subDates = String(p.fecha).split(/[,;]/).map(d => d.trim()).filter(Boolean);
+        subDates.forEach((subDate, dIdx) => {
+          const days = getDaysRemaining(subDate);
+          if (days !== null) {
+            events.push({
+              id: `pericia-${causa.id}-${idx}-${dIdx}`,
+              causa,
+              tipo: `Pericia: ${p.tipo || 'Procesal'}`,
+              categoria: 'Pericia',
+              fecha: subDate,
+              days
+            });
+          }
+        });
+      }
+    });
+  });
+
+  // Sort events chronologically by days remaining (urgent first)
+  return events.sort((a, b) => a.days - b.days);
+}
+
 export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, onSelectFilter }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [tabFilter, setTabFilter] = useState('15dias'); // '15dias' | '30dias' | 'vencidos' | 'todos'
 
   // Extract all expiration events from active causes
   const expirationEvents = useMemo(() => {
-    const events = [];
-
-    (causas || []).forEach(causa => {
-      // Exclude finalized/archived causes
-      if (isFinalizedState(causa.estado, causa.tramite)) return;
-
-      // 1. PP Expiration (1º or 2º) - Solo si el imputado está detenido o con estado especial "Presentada"
-      const isDetenido = causa.detenido === 'SI' || causa.detenido === 'SÍ';
-      const rawPPVal = causa.estado_pp || causa.vencimiento_pp1 || causa.vencimiento_pp || '';
-      const isPresentada = String(rawPPVal).trim().toLowerCase().includes('presentad');
-
-      if (isDetenido || isPresentada) {
-        const isProrrogada = causa.pp_prorrogada === true || causa.pp_prorrogada === 'SI';
-        const vPP = isProrrogada
-          ? (causa.vencimiento_pp2 || causa.vencimiento_pp1 || causa.vencimiento_pp)
-          : (causa.vencimiento_pp1 || causa.vencimiento_pp);
-
-        if (vPP && !checkPPStatusSpecial(vPP)) {
-          const days = getDaysRemaining(vPP);
-          if (days !== null) {
-            events.push({
-              id: `pp-${causa.id}`,
-              causa,
-              tipo: isProrrogada ? '2º Vencimiento PP (Prórroga)' : '1º Vencimiento PP',
-              categoria: 'PP',
-              fecha: vPP,
-              days
-            });
-          }
-        }
-      }
-
-      // 2. IPP Expiration
-      const ippDate = causa.vencimiento_ipp ? String(causa.vencimiento_ipp).trim() : '';
-      if (ippDate && !checkPPStatusSpecial(ippDate)) {
-        const days = getDaysRemaining(ippDate);
-        if (days !== null) {
-          events.push({
-            id: `ipp-${causa.id}`,
-            causa,
-            tipo: 'Vencimiento IPP',
-            categoria: 'IPP',
-            fecha: ippDate,
-            days
-          });
-        }
-      }
-
-      // 3. Pericias Expirations
-      const periciasList = Array.isArray(causa.pericias) ? causa.pericias : [];
-      if (periciasList.length === 0 && causa.pericia_fecha) {
-        periciasList.push({ tipo: causa.pericia_detalle || 'Pericia', fecha: causa.pericia_fecha });
-      }
-
-      periciasList.forEach((p, idx) => {
-        // Exclude finalized/cumplidas/agregadas and en_proceso pericias from alert panel
-        const st = String(p.estado || '').toLowerCase().trim();
-        if (p.finalizada === true || st === 'finalizada' || st === 'cumplida' || st === 'agregada' || st === 'en_proceso' || st === 'en proceso') return;
-
-        if (p.fecha) {
-          const subDates = String(p.fecha).split(/[,;]/).map(d => d.trim()).filter(Boolean);
-          subDates.forEach((subDate, dIdx) => {
-            const days = getDaysRemaining(subDate);
-            if (days !== null) {
-              events.push({
-                id: `pericia-${causa.id}-${idx}-${dIdx}`,
-                causa,
-                tipo: `Pericia: ${p.tipo || 'Procesal'}`,
-                categoria: 'Pericia',
-                fecha: subDate,
-                days
-              });
-            }
-          });
-        }
-      });
-    });
-
-    // Sort events chronologically by days remaining (urgent first)
-    return events.sort((a, b) => a.days - b.days);
+    return getExpirationEvents(causas);
   }, [causas]);
 
   // Counts
