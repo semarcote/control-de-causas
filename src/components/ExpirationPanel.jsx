@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { Calendar, AlertTriangle, Clock, ChevronDown, ChevronUp, ShieldAlert, ArrowRight, ExternalLink, Filter } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Calendar, AlertTriangle, Clock, ChevronDown, ChevronUp, ShieldAlert, ArrowRight, ExternalLink, Filter, Mail, Send, Check, Loader2, Bell, X } from 'lucide-react';
 import { isFinalizedState, renderBadgePP, renderBadgeEstado, renderBadgePericia, formatDisplayDate, checkPPStatusSpecial, getVencimientoIPP } from './CausasTable';
+import { sendEmailAlerts, getStoredEmailConfig, getStoredSheetsUrl, createTriggerAlerts } from '../services/googleSheetsService';
 
 // Helper to calculate days remaining from DD/MM/YY, DD/MM/YYYY or GMT Date strings
 export function getDaysRemaining(dateStr) {
@@ -112,6 +113,52 @@ export function getExpirationEvents(causas) {
 export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, onSelectFilter }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [tabFilter, setTabFilter] = useState('15dias'); // '15dias' | '30dias' | 'vencidos' | 'todos'
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [diasMaxInput, setDiasMaxInput] = useState(15);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [settingTrigger, setSettingTrigger] = useState(false);
+  const [emailStatus, setEmailStatus] = useState(null); // null | { type: 'success'|'error', text: string }
+
+  useEffect(() => {
+    const savedEmail = getStoredEmailConfig();
+    if (savedEmail) {
+      setEmailInput(savedEmail);
+    }
+  }, []);
+
+  const handleSendEmail = async (e) => {
+    e.preventDefault();
+    if (!emailInput.trim()) return;
+
+    setSendingEmail(true);
+    setEmailStatus(null);
+    try {
+      const sheetsUrl = getStoredSheetsUrl();
+      const res = await sendEmailAlerts(sheetsUrl, emailInput.trim(), diasMaxInput);
+      setEmailStatus({ type: 'success', text: res.message || 'Reporte enviado con éxito.' });
+    } catch (err) {
+      setEmailStatus({ type: 'error', text: err.message || 'Error al enviar el reporte.' });
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const handleCreateTrigger = async () => {
+    if (!emailInput.trim()) return;
+
+    setSettingTrigger(true);
+    setEmailStatus(null);
+    try {
+      const sheetsUrl = getStoredSheetsUrl();
+      const res = await createTriggerAlerts(sheetsUrl, emailInput.trim(), diasMaxInput);
+      setEmailStatus({ type: 'success', text: res.message || 'Activador diario de alertas (8:00 AM) programado.' });
+    } catch (err) {
+      setEmailStatus({ type: 'error', text: err.message || 'Error al configurar el activador diario.' });
+    } finally {
+      setSettingTrigger(false);
+    }
+  };
 
   // Extract all expiration events from active causes
   const expirationEvents = useMemo(() => {
@@ -159,14 +206,28 @@ export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, o
           </div>
         </div>
 
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-1.5 self-start sm:self-auto text-xs font-semibold text-slate-400 hover:text-white bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700 transition"
-        >
-          <span>{isExpanded ? 'Ocultar Panel' : 'Ver Panel'}</span>
-          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => {
+              setShowEmailModal(true);
+              setEmailStatus(null);
+            }}
+            className="flex items-center gap-1.5 text-xs font-semibold text-amber-300 hover:text-white bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1.5 rounded-lg border border-amber-500/40 transition shadow-sm"
+          >
+            <Mail className="h-4 w-4" />
+            <span>Enviar Alerta por Email</span>
+          </button>
+
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700 transition"
+          >
+            <span>{isExpanded ? 'Ocultar Panel' : 'Ver Panel'}</span>
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
+
 
       {/* Main KPI Badges (Always Visible) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-slate-950/40 border-b border-slate-800/60">
@@ -385,6 +446,129 @@ export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, o
             </div>
           )}
 
+        </div>
+      )}
+
+      {/* Email Alert Modal */}
+      {showEmailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden p-6 space-y-5">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <Mail className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Alertas por Correo Electrónico</h3>
+                  <p className="text-xs text-slate-400">Notificaciones de vencimientos procesales</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowEmailModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Email Form */}
+            <form onSubmit={handleSendEmail} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Correo Electrónico Destinatario
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="ejemplo@mpba.gov.ar"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    className="w-full rounded-xl bg-slate-950 border border-slate-800 pl-9 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Se enviará un resumen formateado HTML con los vencimientos inminentes.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Rango de Días a Incluir
+                </label>
+                <select
+                  value={diasMaxInput}
+                  onChange={(e) => setDiasMaxInput(Number(e.target.value))}
+                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-white focus:border-amber-500 focus:outline-none"
+                >
+                  <option value={7}>Próximos 7 días hábiles / Vencidos</option>
+                  <option value={15}>Próximos 15 días (Recomendado)</option>
+                  <option value={30}>Próximos 30 días</option>
+                  <option value={60}>Próximos 60 días</option>
+                </select>
+              </div>
+
+              {/* Status Message */}
+              {emailStatus && (
+                <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+                  emailStatus.type === 'success'
+                    ? 'bg-emerald-950/50 border-emerald-500/50 text-emerald-300'
+                    : 'bg-rose-950/50 border-rose-500/50 text-rose-300'
+                }`}>
+                  {emailStatus.type === 'success' ? (
+                    <Check className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+                  )}
+                  <span>{emailStatus.text}</span>
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                <button
+                  type="submit"
+                  disabled={sendingEmail || settingTrigger}
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-lg disabled:opacity-50"
+                >
+                  {sendingEmail ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Enviando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      <span>Enviar Reporte Ahora</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCreateTrigger}
+                  disabled={sendingEmail || settingTrigger}
+                  className="flex flex-items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2.5 px-4 rounded-xl text-xs border border-slate-700 transition disabled:opacity-50"
+                >
+                  {settingTrigger ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Configurando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="h-4 w-4 text-amber-400" />
+                      <span>Activar Alerta Diaria (8 AM)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+
+          </div>
         </div>
       )}
 

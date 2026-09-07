@@ -1131,3 +1131,53 @@ export async function deleteUserFromSheetsTab(url, user) {
     return null;
   }
 }
+
+export const EMAIL_CONFIG_KEY = 'control_causas_email_config';
+
+export function getStoredEmailConfig() {
+  return localStorage.getItem(EMAIL_CONFIG_KEY) || '';
+}
+
+export function setStoredEmailConfig(email) {
+  if (email) {
+    localStorage.setItem(EMAIL_CONFIG_KEY, email.trim());
+  } else {
+    localStorage.removeItem(EMAIL_CONFIG_KEY);
+  }
+}
+
+/**
+ * Disparar envío de correo electrónico con alertas de vencimiento desde Google Apps Script
+ */
+export async function sendEmailAlerts(url, email, diasMax = 15, userName = null) {
+  if (!url) throw new Error('URL de Google Apps Script no configurada');
+  if (!email) throw new Error('Debes ingresar una dirección de correo de destino');
+
+  const targetUserName = userName ? String(userName).trim().toUpperCase() : null;
+  const result = await postToAppsScript(url, {
+    action: 'send_email_alert',
+    email: email.trim(),
+    diasMax: Number(diasMax) || 15,
+    userName: targetUserName
+  });
+  
+  setStoredEmailConfig(email);
+  return result;
+}
+
+/**
+ * Programar activador diario automático a las 8:00 AM en Google Apps Script
+ */
+export async function createTriggerAlerts(url, email, diasMax = 15) {
+  if (!url) throw new Error('URL de Google Apps Script no configurada');
+  if (!email) throw new Error('Debes ingresar una dirección de correo de destino');
+
+  const result = await postToAppsScript(url, {
+    action: 'create_trigger',
+    email: email.trim(),
+    diasMax: Number(diasMax) || 15
+  });
+
+  setStoredEmailConfig(email);
+  return result;
+}

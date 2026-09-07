@@ -293,39 +293,91 @@ export function executeGeminiTool(toolCall, causas) {
   return { error: 'Acción no reconocida' };
 }
 
-const MODELS_TO_TRY = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+async function getAvailableModels(key) {
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data.models || !Array.isArray(data.models)) return [];
+
+    const validModels = data.models
+      .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+      .map(m => m.name.replace(/^models\//, ''));
+
+    validModels.sort((a, b) => {
+      const score = (name) => {
+        if (name.includes('2.0-flash')) return 1;
+        if (name.includes('1.5-flash')) return 2;
+        if (name.includes('flash')) return 3;
+        if (name.includes('1.5-pro')) return 4;
+        if (name.includes('pro')) return 5;
+        return 6;
+      };
+      return score(a) - score(b);
+    });
+
+    return validModels;
+  } catch (e) {
+    return [];
+  }
+}
+
+const FALLBACK_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-2.0-flash-lite',
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-pro',
+  'gemini-1.5-pro-latest',
+  'gemini-pro'
+];
 
 async function fetchGeminiAPI(key, requestBody) {
-  let lastErr = null;
+  let discovered = await getAvailableModels(key);
+  const modelsToTry = discovered.length > 0 ? Array.from(new Set([...discovered, ...FALLBACK_MODELS])) : FALLBACK_MODELS;
 
-  for (const model of MODELS_TO_TRY) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      });
+  let lastErrText = '';
 
-      if (response.ok) {
-        const data = await response.json();
-        return { ok: true, data, model };
+  for (const model of modelsToTry) {
+    const versions = ['v1beta', 'v1'];
+    for (const ver of versions) {
+      const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return { ok: true, data, model, ver };
+        }
+
+        const errText = await response.text();
+        console.warn(`Gemini model ${ver}/${model} status ${response.status}:`, errText);
+        lastErrText = errText;
+
+        if (response.status === 400 && (errText.includes('API_KEY_INVALID') || errText.includes('API key not valid'))) {
+          throw new Error('API_KEY_INVALID');
+        }
+      } catch (e) {
+        if (e.message === 'API_KEY_INVALID') throw e;
+        lastErrText = e.message;
       }
-
-      const errText = await response.text();
-      console.warn(`Gemini model ${model} response status ${response.status}:`, errText);
-      lastErr = errText;
-
-      if (response.status === 400 && (errText.includes('API_KEY_INVALID') || errText.includes('API key not valid'))) {
-        throw new Error('API_KEY_INVALID');
-      }
-    } catch (e) {
-      if (e.message === 'API_KEY_INVALID') throw e;
-      lastErr = e.message;
     }
   }
 
-  throw new Error(`Error en la API de Gemini: ${lastErr || 'Modelos no disponibles.'}`);
+  if (requestBody.tools) {
+    const simplifiedBody = { ...requestBody };
+    delete simplifiedBody.tools;
+    try {
+      return await fetchGeminiAPI(key, simplifiedBody);
+    } catch (e) {}
+  }
+
+  throw new Error(`No se pudo conectar con Gemini. Verifique su API Key. (${lastErrText || 'Modelos no disponibles'})`);
 }
 
 // Main execution API for Gemini Assistant
