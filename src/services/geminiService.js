@@ -292,14 +292,47 @@ export function executeGeminiTool(toolCall, causas) {
   return { error: 'Acción no reconocida' };
 }
 
+const MODELS_TO_TRY = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+
+async function fetchGeminiAPI(key, requestBody) {
+  let lastErr = null;
+
+  for (const model of MODELS_TO_TRY) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return { ok: true, data, model };
+      }
+
+      const errText = await response.text();
+      console.warn(`Gemini model ${model} response status ${response.status}:`, errText);
+      lastErr = errText;
+
+      if (response.status === 400 && (errText.includes('API_KEY_INVALID') || errText.includes('API key not valid'))) {
+        throw new Error('API_KEY_INVALID');
+      }
+    } catch (e) {
+      if (e.message === 'API_KEY_INVALID') throw e;
+      lastErr = e.message;
+    }
+  }
+
+  throw new Error(`Error en la API de Gemini: ${lastErr || 'Modelos no disponibles.'}`);
+}
+
 // Main execution API for Gemini Assistant
 export async function sendPromptToGemini(userPrompt, conversationHistory = [], causas = [], apiKey = '', currentUser = null) {
   const key = apiKey || getStoredGeminiApiKey(currentUser);
   if (!key) {
     throw new Error('API_KEY_MISSING');
   }
-
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`;
 
   const userNameStr = currentUser?.name ? ` (Usuario: ${currentUser.name})` : '';
 
@@ -333,22 +366,7 @@ Si el usuario solicita realizar cambios en una causa (registrar audiencias, modi
     ]
   };
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody)
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error('Gemini API Error:', errText);
-    if (response.status === 400 && errText.includes('API_KEY_INVALID')) {
-      throw new Error('API_KEY_INVALID');
-    }
-    throw new Error(`Error en la API de Gemini (${response.status}): ${errText}`);
-  }
-
-  const data = await response.json();
+  const { data } = await fetchGeminiAPI(key, requestBody);
   const candidate = data.candidates?.[0];
   if (!candidate) {
     throw new Error('No se recibió respuesta válida de Gemini.');
@@ -390,24 +408,19 @@ Si el usuario solicita realizar cambios en una causa (registrar audiencias, modi
       }
     ];
 
-    const secondResponse = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    try {
+      const secondRes = await fetchGeminiAPI(key, {
         systemInstruction,
         contents: secondTurnContents
-      })
-    });
+      });
 
-    if (secondResponse.ok) {
-      const secondData = await secondResponse.json();
-      const secondPart = secondData.candidates?.[0]?.content?.parts?.[0];
+      const secondPart = secondRes.data.candidates?.[0]?.content?.parts?.[0];
       return {
         type: 'text',
         text: secondPart?.text || 'Búsqueda completada exitosamente.',
         toolResult
       };
-    } else {
+    } catch (e) {
       return {
         type: 'text',
         text: `Resultados encontrados (${toolResult.count || toolResult.totalCount || 0}):\n\n` + JSON.stringify(toolResult, null, 2),
