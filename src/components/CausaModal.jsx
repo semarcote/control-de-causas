@@ -335,10 +335,16 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
       ? `${causa.tramite} /// ${timelineEntry}`
       : timelineEntry;
 
+    const activeP = (updatedPericias || []).find(p => !p.finalizada && p.estado !== 'agregada') || (updatedPericias || [])[0];
+
     const updatedCausa = {
       ...formData,
       tramite: updatedTramite,
       pericias: updatedPericias,
+      pericia_fecha: activeP ? activeP.fecha : (formData.pericia_fecha || ''),
+      pericia_detalle: activeP ? activeP.tipo : (formData.pericia_detalle || ''),
+      pericia_finalizada: activeP ? (activeP.finalizada || activeP.estado === 'agregada') : false,
+      pericia_estado: activeP ? (activeP.estado || '') : '',
       revisado: todayStr,
       revisar_dias: newPlazoDias
     };
@@ -348,7 +354,19 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
   };
 
   const handleRemovePericiaItem = (idToRemove) => {
-    setPericiasState(prev => prev.filter(p => p.id !== idToRemove));
+    const updated = periciasState.filter(p => p.id !== idToRemove);
+    setPericiasState(updated);
+    const activeP = (updated || []).find(p => !p.finalizada && p.estado !== 'agregada') || (updated || [])[0];
+    const updatedCausa = {
+      ...formData,
+      pericias: updated,
+      pericia_fecha: activeP ? activeP.fecha : '',
+      pericia_detalle: activeP ? activeP.tipo : '',
+      pericia_finalizada: activeP ? (activeP.finalizada || activeP.estado === 'agregada') : false,
+      pericia_estado: activeP ? (activeP.estado || '') : ''
+    };
+    setFormData(updatedCausa);
+    onSave(updatedCausa);
   };
 
   const handleStartEditPericia = (p) => {
@@ -553,6 +571,8 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
     const isIndagado = (indagatoriaState === 'SI' || indagatoriaState === 'SÍ') && !!fechaIndagatoriaState;
     const calculatedIndagatoriaIPP = isIndagado ? calculate4MonthsIPPDate(fechaIndagatoriaState) : '';
 
+    const activeP = (periciasState || []).find(p => !p.finalizada && p.estado !== 'agregada') || (periciasState || [])[0];
+
     const updatedCausa = {
       ...formData,
       sumario: causa.sumario || formData.sumario || 'NO',
@@ -572,7 +592,12 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
       vencimiento_ipp: isIndagado ? calculatedIndagatoriaIPP : (flagranciaState === 'NO' ? '' : ((formattedVencIPP && !checkPPStatusSpecial(formattedVencIPP)) ? formattedVencIPP : '')),
       revisar_dias: newPlazoDias,
       revisado: todayStr,
-      tramite: updatedTramite
+      tramite: updatedTramite,
+      pericias: periciasState,
+      pericia_fecha: activeP ? activeP.fecha : (formData.pericia_fecha || ''),
+      pericia_detalle: activeP ? activeP.tipo : (formData.pericia_detalle || ''),
+      pericia_finalizada: activeP ? (activeP.finalizada || activeP.estado === 'agregada') : false,
+      pericia_estado: activeP ? (activeP.estado || '') : ''
     };
 
     try {

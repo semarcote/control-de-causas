@@ -426,9 +426,9 @@ export function getPericiaColor(pericia_fecha) {
 }
 
 export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', finalizada = false, estado = '') {
-  const st = String(estado || '').toLowerCase().trim();
+  const st = String(estado || (typeof finalizada === 'string' ? finalizada : '') || '').toLowerCase().trim();
   const isAgregada = finalizada === true || st === 'finalizada' || st === 'cumplida' || st === 'agregada';
-  const isEnProceso = st === 'en_proceso' || st === 'en proceso';
+  const isEnProceso = st === 'en_proceso' || st === 'en proceso' || st.includes('proceso');
 
   if (isAgregada) {
     return (
@@ -441,11 +441,11 @@ export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', fin
   }
 
   if (isEnProceso) {
+    const labelText = pericia_detalle ? `En Proceso (${pericia_detalle})` : 'En Proceso';
     return (
-      <span key="badge-en-proceso" className="inline-flex items-center gap-1 rounded bg-purple-500/20 px-2 py-0.5 text-xs font-semibold text-purple-300 border border-purple-500/40 whitespace-nowrap" title={`${pericia_detalle || 'Pericia'} (En Proceso)`}>
-        <Activity className="h-3 w-3 text-purple-400 shrink-0" />
-        En Proceso
-        {pericia_detalle && <span className="ml-0.5 text-[10px] text-purple-200/80 font-normal">({pericia_detalle})</span>}
+      <span key="badge-en-proceso" className="inline-flex items-center gap-1 rounded bg-purple-500/20 px-2.5 py-0.5 text-xs font-semibold text-purple-300 border border-purple-500/40 whitespace-nowrap shadow-sm" title={`${pericia_detalle || 'Pericia'} (En Proceso)`}>
+        <Activity className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+        {labelText}
       </span>
     );
   }
