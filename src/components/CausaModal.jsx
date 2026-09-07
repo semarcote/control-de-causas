@@ -555,7 +555,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
 
     const updatedCausa = {
       ...formData,
-      sumario: (sumarioState === 'SÍ' || sumarioState === 'SI') ? (formData.sumario?.trim() && formData.sumario.trim().toLowerCase() !== 'no' && formData.sumario.trim().toLowerCase() !== 'si' && formData.sumario.trim().toLowerCase() !== 'sí' ? formData.sumario : 'SÍ') : 'NO',
+      sumario: causa.sumario || formData.sumario || 'NO',
       estado: nuevoEstado,
       detenido: finalDetenido,
       flagrancia: flagranciaState,
@@ -1649,22 +1649,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                   </div>
                 )}
 
-                {isEnTramite && (
-                  <div>
-                    <label className="block font-semibold text-slate-300 mb-1">
-                      ¿Tiene Sumario?
-                    </label>
-                    <select
-                      value={sumarioState}
-                      onChange={(e) => setSumarioState(e.target.value)}
-                      className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="NO">NO</option>
-                      <option value="SÍ">SÍ (CON SUMARIO)</option>
-                    </select>
-                  </div>
-                )}
-              </div>
+               </div>
 
               {/* Seccion de Fecha de Flagrancia y Calculo IPP (Visibles si Flagrancia = SI) */}
               {isEnTramite && (flagranciaState === 'SI' || flagranciaState === 'SÍ') && (() => {
