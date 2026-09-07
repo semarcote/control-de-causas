@@ -197,15 +197,9 @@ export function calculate4MonthsIPPDate(dateInput) {
 }
 
 export function getVencimientoIPP(causa) {
-  if (!causa) return '';
-  if (causa.indagatoria === 'NO') return '';
-  if (causa.fecha_indagatoria) {
-    const calculated = calculate4MonthsIPPDate(causa.fecha_indagatoria);
-    if (calculated) return calculated;
-  }
-  if (!causa.vencimiento_ipp) return '';
+  if (!causa || !causa.vencimiento_ipp) return '';
   const str = String(causa.vencimiento_ipp).trim();
-  return formatDisplayDate(str);
+  return formatDisplayDate(str) || '';
 }
 
 export function renderBadgeIPP(vencIPP, causa = null) {

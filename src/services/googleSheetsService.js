@@ -21,8 +21,9 @@ const SHEET_NAME = 'SEBASTIÁN MARCOTE';
 
 const HEADERS = [
   'id', 'ipp', 'estado', 'revision', 'revisado', 'revisar_dias', 'caratula', 
-  'sumario', 'denunciado_en', 'fecha_inicio', 'tramite', 'detenido',
-  'vencimiento_pp1', 'vencimiento_pp2', 'vencimiento_ipp', 'pp_prorrogada', 'pericias', 'audiencias'
+  'sumario', 'denunciado_en', 'fecha_inicio', 'tramite', 'detenido', 'fecha_detencion',
+  'vencimiento_pp1', 'vencimiento_pp2', 'vencimiento_ipp', 'pp_prorrogada', 'pericias', 'audiencias',
+  'indagatoria', 'fecha_indagatoria'
 ];
 
 function deleteUnusedDefaultSheets(ss) {
@@ -52,8 +53,10 @@ function cleanAndMigrateSheetHeaders(sheet) {
 
     const hRow = data[0].map(h => String(h || '').trim().toLowerCase());
     const hasFechaInicioCol = hRow.includes('fecha_inicio') || hRow.includes('fecha inicio');
+    const hasFechaIndagatoriaCol = hRow.includes('fecha_indagatoria') || hRow.includes('fecha indagatoria');
+    const hasFechaDetencionCol = hRow.includes('fecha_detencion') || hRow.includes('fecha detencion');
     const currentMaxCols = sheet.getMaxColumns();
-    const needsMigration = !hasFechaInicioCol || hRow.length !== HEADERS.length || currentMaxCols !== HEADERS.length;
+    const needsMigration = !hasFechaInicioCol || !hasFechaIndagatoriaCol || !hasFechaDetencionCol || hRow.length !== HEADERS.length || currentMaxCols !== HEADERS.length;
 
     if (needsMigration && data.length > 1) {
       const oldMap = {};
@@ -82,12 +85,15 @@ function cleanAndMigrateSheetHeaders(sheet) {
         }
 
         const fInicio = getOld('fecha_inicio') ?? getOld('fecha inicio') ?? getOld('revisado') ?? String(row[3] || '');
+        const fDetencion = getOld('fecha_detencion') ?? getOld('fecha detencion') ?? '';
         const vPP1 = getOld('vencimiento_pp1') ?? getOld('vencimiento pp1') ?? getOld('vencimiento_pp') ?? '';
         const vPP2 = getOld('vencimiento_pp2') ?? getOld('vencimiento pp2') ?? '';
         const vIPP = getOld('vencimiento_ipp') ?? getOld('venc_ipp') ?? getOld('vencimiento ipp') ?? getOld('venc. ipp') ?? getOld('vencimiento_fecha') ?? '';
         const ppProrr = getOld('pp_prorrogada') ?? getOld('pp prorrogada') ?? '';
         const pericias = getOld('pericias') ?? '[]';
         const auds = getOld('audiencias') ?? '[]';
+        const indVal = getOld('indagatoria') ?? '';
+        const fIndVal = getOld('fecha_indagatoria') ?? getOld('fecha indagatoria') ?? '';
 
         newRows.push([
           getOld('id') ?? String(row[0] || ''),
@@ -102,12 +108,15 @@ function cleanAndMigrateSheetHeaders(sheet) {
           fInicio,
           getOld('tramite') ?? String(row[8] || ''),
           getOld('detenido') ?? String(row[9] || ''),
+          fDetencion,
           vPP1,
           vPP2,
           vIPP,
           String(ppProrr).toLowerCase() === 'true' || String(ppProrr).toUpperCase() === 'SI' ? 'true' : 'false',
           pericias,
-          auds
+          auds,
+          indVal,
+          fIndVal
         ]);
       }
 
@@ -138,8 +147,24 @@ function cleanAndMigrateSheetHeaders(sheet) {
   } catch (e) {}
 }
 
+function migrateAllUserSheets(ss) {
+  try {
+    if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheets = ss.getSheets();
+    for (let i = 0; i < sheets.length; i++) {
+      const s = sheets[i];
+      const sName = s.getName().trim().toUpperCase();
+      if (sName !== 'USUARIOS') {
+        cleanAndMigrateSheetHeaders(s);
+      }
+    }
+  } catch (e) {}
+}
+
 function getOrCreateSheet(userName) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  migrateAllUserSheets(ss);
+
   const targetName = (userName || SHEET_NAME).trim().toUpperCase();
   let sheet = ss.getSheetByName(targetName);
 
@@ -424,6 +449,10 @@ function rowToCausa(row, headersMap) {
     audiencias = [];
   }
 
+  const fechaDetencionVal = getVal('fecha_detencion') ?? getVal('fecha detencion') ?? (row.length >= 21 ? String(row[12] || '') : '');
+  const indVal = getVal('indagatoria') ?? (row.length >= 21 ? String(row[19] || '') : '');
+  const fIndVal = getVal('fecha_indagatoria') ?? getVal('fecha indagatoria') ?? (row.length >= 21 ? String(row[20] || '') : '');
+
   return {
     id: getVal('id') ?? String(row[0] || ''),
     ipp: getVal('ipp') ?? String(row[1] || ''),
@@ -437,12 +466,15 @@ function rowToCausa(row, headersMap) {
     fecha_inicio: fechaInicio || revisado || '',
     tramite: tramite,
     detenido: detenido,
+    fecha_detencion: fechaDetencionVal,
     vencimiento_pp1: vencimientoPP1,
     vencimiento_pp2: vencimientoPP2,
     vencimiento_ipp: vencimientoIPP,
     pp_prorrogada: String(ppProrrogadaVal).toLowerCase() === 'true' || ppProrrogadaVal === true || String(ppProrrogadaVal).toUpperCase() === 'SI',
     pericias: pericias,
-    audiencias: audiencias
+    audiencias: audiencias,
+    indagatoria: indVal || (fIndVal ? 'SI' : 'NO'),
+    fecha_indagatoria: fIndVal
   };
 }
 
@@ -474,12 +506,15 @@ function causaToRow(c) {
     fechaInicio,
     c.tramite || '',
     c.detenido || '',
+    c.fecha_detencion || '',
     c.vencimiento_pp1 || '',
     c.vencimiento_pp2 || '',
     c.vencimiento_ipp || '',
     c.pp_prorrogada ? 'true' : 'false',
     JSON.stringify(c.pericias || []),
-    JSON.stringify(c.audiencias || [])
+    JSON.stringify(c.audiencias || []),
+    c.indagatoria || (c.fecha_indagatoria ? 'SI' : 'NO'),
+    c.fecha_indagatoria || ''
   ];
 }
 

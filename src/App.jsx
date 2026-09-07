@@ -9,6 +9,7 @@ import LoginScreen from './components/LoginScreen';
 import UserManagementModal from './components/UserManagementModal';
 import ExpirationPanel, { getDaysRemaining, getExpirationEvents } from './components/ExpirationPanel';
 import AudienciasPanel from './components/AudienciasPanel';
+import GeminiAssistantModal from './components/GeminiAssistantModal';
 import {
   getStoredSheetsUrl,
   fetchCausasFromSheets,
@@ -90,6 +91,9 @@ function mergeCausas(localList = [], remoteList = []) {
           vencimiento_ipp: l.vencimiento_ipp || existing.vencimiento_ipp,
           vencimiento_pp1: l.vencimiento_pp1 || existing.vencimiento_pp1,
           vencimiento_pp2: l.vencimiento_pp2 || existing.vencimiento_pp2,
+          indagatoria: l.indagatoria || existing.indagatoria,
+          fecha_indagatoria: l.fecha_indagatoria || existing.fecha_indagatoria,
+          fecha_detencion: l.fecha_detencion || existing.fecha_detencion,
           audiencias: Array.isArray(l.audiencias) && l.audiencias.length > 0 ? l.audiencias : existing.audiencias,
           pericias: Array.isArray(l.pericias) && l.pericias.length > 0 ? l.pericias : existing.pericias
         });
@@ -506,6 +510,7 @@ export default function App() {
   };
 
   const [activePage, setActivePage] = useState('causas'); // 'causas' | 'vencimientos' | 'usuarios'
+  const [isGeminiOpen, setIsGeminiOpen] = useState(false);
 
   // Count urgent expirations (<= 15 days) using exact expiration events logic
   const urgentVencimientosCount = useMemo(() => {
@@ -549,6 +554,7 @@ export default function App() {
         activePage={activePage}
         onPageChange={setActivePage}
         onNewCausa={() => setIsCreating(true)}
+        onOpenGemini={() => setIsGeminiOpen(true)}
         onExportData={handleExportData}
         onResetData={handleResetData}
         onLogout={handleLogout}
@@ -669,6 +675,18 @@ export default function App() {
           onClose={() => setIsUserManagementOpen(false)}
         />
       )}
+
+      {/* Gemini AI Assistant Modal */}
+      <GeminiAssistantModal
+        isOpen={isGeminiOpen}
+        onClose={() => setIsGeminiOpen(false)}
+        causas={causas}
+        onSaveCausa={handleSaveCausa}
+        onSelectCausa={(causa) => {
+          setSelectedCausa(causa);
+          setIsGeminiOpen(false);
+        }}
+      />
 
     </div>
   );

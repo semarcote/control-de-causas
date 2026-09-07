@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Scale, Plus, Download, RefreshCw, Clock, ShieldAlert, Users, LogOut, Calendar, Files, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import { Scale, Plus, Download, RefreshCw, Clock, ShieldAlert, Users, LogOut, Calendar, Files, AlertTriangle, FileSpreadsheet, Sparkles } from 'lucide-react';
 
 export default function Header({
   totalCausas,
@@ -10,6 +10,7 @@ export default function Header({
   activePage,
   onPageChange,
   onNewCausa,
+  onOpenGemini,
   onExportData,
   onResetData,
   onLogout
@@ -20,85 +21,74 @@ export default function Header({
     const updateTime = () => {
       const now = new Date();
       const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-      setCurrentDate(now.toLocaleDateString('es-AR', options));
+      let str = now.toLocaleDateString('es-AR', options);
+      // Capitalize first letter
+      str = str.charAt(0).toUpperCase() + str.slice(1);
+      setCurrentDate(str);
     };
     updateTime();
-    const interval = setInterval(updateTime, 60000);
-    return () => clearInterval(interval);
   }, []);
 
   return (
-    <header className="glass-panel sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md px-4 py-3 sm:px-6 space-y-3">
-      <div className="w-full flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        
-        {/* Title & Organization info */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-500/20">
+    <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 shadow-xl">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-2">
+
+        {/* Logo & System Identity */}
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-600/30 ring-1 ring-white/20">
             <Scale className="h-6 w-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
-                CONTROL DE CAUSAS
-              </h1>
-              <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-400 border border-blue-500/20 whitespace-nowrap">
+              <h1 className="text-lg font-black tracking-tight text-white uppercase">CONTROL DE CAUSAS</h1>
+              <span className="rounded-full bg-blue-500/20 px-2.5 py-0.5 text-[10px] font-black text-blue-300 border border-blue-500/30">
                 Ministerio Público Fiscal
               </span>
             </div>
-            <p className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-              <span className="text-[11px] text-slate-300 font-medium">Dpto. Judicial Zárate-Campana</span>
-              <span className="text-slate-600">•</span>
-              <span className="flex items-center gap-1 text-[11px] text-slate-400">
-                <Clock className="h-3 w-3 text-slate-500" />
-                <span className="capitalize">{currentDate}</span>
-              </span>
+            <p className="text-xs text-slate-400 font-medium">
+              Dpto. Judicial Zárate-Campana <span className="mx-1">•</span> {currentDate}
             </p>
           </div>
         </div>
 
-        {/* Action Buttons & User Info */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Quick Action Buttons */}
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <button
             onClick={onNewCausa}
-            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-medium text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-500 active:scale-95"
+            className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-blue-600/30 ring-1 ring-blue-400/40 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Plus className="h-4 w-4" />
-            Nueva Causa
+            <span>Nueva Causa</span>
           </button>
 
-          {/* Logged User Profile & Logout */}
+          {/* User Profile Badge */}
           {currentUser && (
             <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-              <div className="flex items-center gap-2 rounded-xl bg-slate-900 px-2.5 py-1.5 border border-slate-800 text-xs">
-                <div className="h-6 w-6 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-[11px]">
-                  {currentUser.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="hidden sm:block text-left">
-                  <span className="block font-bold text-slate-200 text-[11px] leading-tight uppercase tracking-wide">
-                    {currentUser.name.toUpperCase()}
-                  </span>
-                  <span className="block text-[10px] text-slate-400 leading-tight">
-                    {currentUser.role}
-                  </span>
-                </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-slate-300 font-bold text-xs border border-slate-700">
+                {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
               </div>
-
-              <button
-                onClick={onLogout}
-                title="Cerrar Sesión"
-                className="flex items-center gap-1 rounded-xl bg-rose-500/10 p-2 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 hover:text-rose-300 transition"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
+              <div className="hidden md:block text-left">
+                <p className="text-xs font-bold text-slate-200 leading-tight">{currentUser.name}</p>
+                <p className="text-[10px] text-slate-400">{currentUser.role || 'Usuario'}</p>
+              </div>
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition ml-1"
+                  title="Cerrar sesión"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              )}
             </div>
           )}
         </div>
 
       </div>
 
-      {/* Main Page Navigation Bar */}
-      <div className="w-full flex items-center gap-2 pt-1 border-t border-slate-800/60">
-        
+      {/* Page Navigation Bar */}
+      <div className="w-full flex items-center gap-2 pt-1 border-t border-slate-800/60 overflow-x-auto no-scrollbar">
+
         <button
           onClick={() => onPageChange('causas')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
@@ -149,6 +139,21 @@ export default function Header({
             </span>
           )}
         </button>
+
+        {/* Gemini AI Assistant Button */}
+        {onOpenGemini && (
+          <button
+            onClick={onOpenGemini}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all bg-gradient-to-r from-purple-900/50 to-indigo-900/50 text-purple-200 hover:text-white hover:from-purple-800/80 hover:to-indigo-800/80 border border-purple-500/40 shadow-lg shadow-purple-900/20"
+            title="Abrir Asistente Inteligente Gemini IA"
+          >
+            <Sparkles className="h-4 w-4 text-purple-400 animate-pulse" />
+            <span>Asistente Gemini</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-500/30 text-purple-300 border border-purple-400/30">
+              IA
+            </span>
+          </button>
+        )}
 
         {(currentUser?.role === 'Administrador General' || currentUser?.name?.toLowerCase().includes('marcote')) && (
           <button
