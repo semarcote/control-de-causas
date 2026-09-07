@@ -172,8 +172,9 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
   };
 
   // Parse timeline items from `tramite` string using /// as delimiter
-  const rawTimeline = causa.tramite
-    ? causa.tramite.split('///').map(item => item.trim()).filter(Boolean)
+  const currentTramite = formData.tramite !== undefined ? formData.tramite : (causa.tramite || '');
+  const rawTimeline = currentTramite
+    ? currentTramite.split('///').map(item => item.trim()).filter(Boolean)
     : [];
 
   const handleInputChange = (field, value) => {

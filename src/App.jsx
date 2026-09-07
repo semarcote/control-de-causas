@@ -435,6 +435,10 @@ export default function App() {
       return nextList;
     });
 
+    if (selectedCausa && (selectedCausa.id === updatedCausa.id || (selectedCausa.ipp && selectedCausa.ipp === updatedCausa.ipp))) {
+      setSelectedCausa(updatedCausa);
+    }
+
     const sheetsUrl = getStoredSheetsUrl();
     if (sheetsUrl) {
       updateCausaInSheets(sheetsUrl, updatedCausa, currentUser?.name).catch(e => console.error('Background sync save error:', e));
