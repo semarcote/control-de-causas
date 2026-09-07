@@ -7,8 +7,9 @@ function getUserStorageKey(user, prefix) {
 }
 
 export function getStoredGeminiApiKey(user) {
+  if (!user) return '';
   const key = getUserStorageKey(user, 'control_causas_gemini_key');
-  return localStorage.getItem(key) || localStorage.getItem('control_causas_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
+  return localStorage.getItem(key) || '';
 }
 
 export function setStoredGeminiApiKey(user, apiKey) {

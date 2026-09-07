@@ -21,8 +21,18 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], cur
       setTempApiKey(currentKey);
 
       const storedHistory = getStoredGeminiHistory(currentUser);
-      if (storedHistory && storedHistory.length > 0) {
-        setMessages(storedHistory);
+      if (storedHistory && Array.isArray(storedHistory) && storedHistory.length > 0) {
+        // Ensure welcome message inside history also uses current user name if present
+        const sanitizedHistory = storedHistory.map(m => {
+          if (m.id === 'welcome') {
+            return {
+              ...m,
+              text: `¡Hola **${currentUser.name || 'Usuario'}**! Soy tu **Asistente Inteligente Gemini** personal para el Control de Causas MPBA.\n\nPuedo ayudarte a buscar expedientes, consultar próximos vencimientos (IPP a 4 meses, Prisión Preventiva, Pericias), registrar nuevas audiencias o generar un resumen procesal.`
+            };
+          }
+          return m;
+        });
+        setMessages(sanitizedHistory);
       } else {
         setMessages([
           {

@@ -705,6 +705,21 @@ function doPost(e) {
       return jsonResponse({ status: 'success', message: 'Pestaña de usuario procesada: ' + targetUserName });
     }
 
+    if (action === 'send_email_alert' || action === 'sendEmailAlert') {
+      const targetEmail = contents.email || contents.userEmail;
+      const diasMax = contents.diasMax || 15;
+      if (!targetEmail) throw new Error('Se requiere un correo electrónico de destino');
+      const res = enviarAlertasVencimientos(targetEmail, diasMax, userName);
+      return jsonResponse(res);
+    }
+
+    if (action === 'create_trigger') {
+      const targetEmail = contents.email || contents.userEmail;
+      const diasMax = contents.diasMax || 15;
+      const res = crearActivadorDiarioAlertas(targetEmail, diasMax);
+      return jsonResponse(res);
+    }
+
     return jsonResponse({ status: 'error', message: 'Acción no válida' });
   } catch (err) {
     return jsonResponse({ status: 'error', message: err.toString() });
@@ -714,6 +729,149 @@ function doPost(e) {
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getDaysRemainingScript(dateStr) {
+  if (!dateStr || dateStr === '-' || dateStr === 'Sin fecha') return null;
+  var parts = String(dateStr).trim().split('/');
+  if (parts.length < 3) return null;
+  var day = parseInt(parts[0], 10);
+  var month = parseInt(parts[1], 10) - 1;
+  var year = parseInt(parts[2], 10);
+  if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+  if (year < 100) year += 2000;
+  var targetDate = new Date(year, month, day);
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24));
+}
+
+function enviarAlertasVencimientos(emailDestino, diasMax, userName) {
+  if (!emailDestino) return { status: 'error', message: 'Email de destino no especificado' };
+  diasMax = diasMax || 15;
+  var sheet = getOrCreateSheet(userName);
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return { status: 'success', message: 'No hay causas registradas para enviar reportes' };
+
+  var headersMap = {};
+  var hRow = data[0];
+  for (var h = 0; h < hRow.length; h++) {
+    var colName = String(hRow[h] || '').trim().toLowerCase();
+    if (colName) headersMap[colName] = h;
+  }
+
+  var alertas = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var causa = rowToCausa(row, headersMap);
+    var st = String(causa.estado || '').toLowerCase().trim();
+    var tr = String(causa.tramite || '').toLowerCase().trim();
+    if (st.includes('archiv') || st.includes('finaliz') || tr.includes('archiv') || tr.includes('finaliz')) continue;
+
+    // Vencimiento PP
+    var isDet = causa.detenido === 'SI' || causa.detenido === 'SÍ';
+    var vPP = causa.pp_prorrogada ? (causa.vencimiento_pp2 || causa.vencimiento_pp1) : causa.vencimiento_pp1;
+    if ((isDet || (causa.estado_pp && String(causa.estado_pp).toLowerCase().includes('presentad'))) && vPP) {
+      var dPP = getDaysRemainingScript(vPP);
+      if (dPP !== null && dPP <= diasMax) {
+        alertas.push({ causa: causa, tipo: causa.pp_prorrogada ? '2º Vencimiento PP (Prórroga)' : '1º Vencimiento PP', fecha: vPP, dias: dPP });
+      }
+    }
+
+    // Vencimiento IPP
+    if (causa.vencimiento_ipp) {
+      var dIPP = getDaysRemainingScript(causa.vencimiento_ipp);
+      if (dIPP !== null && dIPP <= diasMax) {
+        alertas.push({ causa: causa, tipo: 'Vencimiento IPP', fecha: causa.vencimiento_ipp, dias: dIPP });
+      }
+    }
+
+    // Pericias
+    if (Array.isArray(causa.pericias)) {
+      causa.pericias.forEach(function(p) {
+        var pst = String(p.estado || '').toLowerCase().trim();
+        if (pst === 'finalizada' || pst === 'cumplida' || pst === 'agregada' || p.finalizada) return;
+        if (p.fecha) {
+          var dP = getDaysRemainingScript(p.fecha);
+          if (dP !== null && dP <= diasMax) {
+            alertas.push({ causa: causa, tipo: 'Pericia: ' + (p.tipo || 'Procesal'), fecha: p.fecha, dias: dP });
+          }
+        }
+      });
+    }
+  }
+
+  alertas.sort(function(a, b) { return a.dias - b.dias; });
+
+  if (alertas.length === 0) {
+    return { status: 'success', message: 'No hay vencimientos pendientes en el plazo seleccionado (' + diasMax + ' días)' };
+  }
+
+  var html = '<div style="font-family: Arial, Helvetica, sans-serif; max-width: 680px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">';
+  html += '<div style="background-color: #0f172a; padding: 24px; text-align: center; color: white; border-bottom: 3px solid #f59e0b;">';
+  html += '<h2 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24; letter-spacing: 0.5px;">🚨 CONTROL DE VENCIMIENTOS PROCESALES</h2>';
+  html += '<p style="margin: 6px 0 0 0; font-size: 13px; color: #94a3b8;">Ministerio Público Fiscal — Alertas de Plazos Inminentes</p>';
+  html += '</div>';
+  html += '<div style="padding: 24px; background-color: #ffffff;">';
+  html += '<p style="font-size: 14px; color: #334155; margin-top: 0;">Estimado/a Fiscal / Instructor: Se registran <strong>' + alertas.length + ' vencimiento(s)</strong> próximos o cumplidos que requieren intervención:</p>';
+
+  html += '<table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; margin-top: 16px;">';
+  html += '<thead><tr style="background-color: #f8fafc; color: #475569; border-bottom: 2px solid #e2e8f0;">';
+  html += '<th style="padding: 10px 12px;">Estado / Plazo</th><th style="padding: 10px 12px;">IPP / Carátula</th><th style="padding: 10px 12px;">Tipo de Evento</th><th style="padding: 10px 12px;">Fecha Venc.</th>';
+  html += '</tr></thead><tbody>';
+
+  alertas.forEach(function(item) {
+    var badgeBg = item.dias < 0 ? '#fee2e2' : (item.dias <= 3 ? '#ffedd5' : '#e0f2fe');
+    var badgeTxt = item.dias < 0 ? '#991b1b' : (item.dias <= 3 ? '#9a3412' : '#075985');
+    var badgeLabel = item.dias < 0 ? 'VENCIDO (' + Math.abs(item.dias) + 'd)' : (item.dias === 0 ? '¡HOY!' : item.dias + ' días');
+
+    html += '<tr style="border-bottom: 1px solid #f1f5f9;">';
+    html += '<td style="padding: 12px;"><span style="background-color:' + badgeBg + '; color:' + badgeTxt + '; font-weight: bold; padding: 4px 10px; border-radius: 6px; font-size: 11px; display: inline-block;">' + badgeLabel + '</span></td>';
+    html += '<td style="padding: 12px; color: #0f172a;"><strong>IPP: ' + (item.causa.ipp || '-') + '</strong><br/><span style="color: #64748b; font-size: 11px;">' + (item.causa.caratula || item.causa.sumario || '') + '</span></td>';
+    html += '<td style="padding: 12px; color: #334155; font-weight: 500;">' + item.tipo + '</td>';
+    html += '<td style="padding: 12px; font-weight: bold; color: #0f172a;">' + item.fecha + '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  html += '<div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 12px; color: #94a3b8;">';
+  html += 'Este es un reporte automático generado desde Control de Causas MPBA.<br/>Emisión: ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') + '';
+  html += '</div></div></div>';
+
+  MailApp.sendEmail({
+    to: emailDestino,
+    subject: '🚨 ALERTAS DE VENCIMIENTO (' + alertas.length + ') - CONTROL DE CAUSAS',
+    htmlBody: html
+  });
+
+  return { status: 'success', message: 'Correo enviado exitosamente a ' + emailDestino, count: alertas.length };
+}
+
+function crearActivadorDiarioAlertas(emailDestino, diasMax) {
+  emailDestino = emailDestino || Session.getActiveUser().getEmail();
+  diasMax = diasMax || 15;
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'ejecutarAlertaDiariaVencimientos') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  ScriptApp.newTrigger('ejecutarAlertaDiariaVencimientos')
+    .timeBased()
+    .atHour(8)
+    .everyDays(1)
+    .create();
+  PropertiesService.getScriptProperties().setProperty('EMAIL_ALERTA_DESTINO', emailDestino);
+  PropertiesService.getScriptProperties().setProperty('DIAS_ALERTA_MAX', String(diasMax));
+  return { status: 'success', message: 'Activador diario de alertas (8:00 AM) programado para ' + emailDestino };
+}
+
+function ejecutarAlertaDiariaVencimientos() {
+  var email = PropertiesService.getScriptProperties().getProperty('EMAIL_ALERTA_DESTINO') || Session.getActiveUser().getEmail();
+  var dias = parseInt(PropertiesService.getScriptProperties().getProperty('DIAS_ALERTA_MAX') || '15', 10);
+  if (email) {
+    enviarAlertasVencimientos(email, dias);
+  }
 }
 `;
 
