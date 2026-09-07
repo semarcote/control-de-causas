@@ -425,13 +425,27 @@ export function getPericiaColor(pericia_fecha) {
   }
 }
 
-export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', finalizada = false) {
-  if (finalizada) {
+export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', finalizada = false, estado = '') {
+  const st = String(estado || '').toLowerCase().trim();
+  const isAgregada = finalizada === true || st === 'finalizada' || st === 'cumplida' || st === 'agregada';
+  const isEnProceso = st === 'en_proceso' || st === 'en proceso';
+
+  if (isAgregada) {
     return (
-      <span key="badge-cumplida" className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-300 border border-emerald-500/40 opacity-80" title={`${pericia_detalle} (Cumplida / Finalizada)`}>
+      <span key="badge-agregada" className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-300 border border-emerald-500/40 opacity-90" title={`${pericia_detalle} (Agregada / Cumplida)`}>
         <CheckCircle2 className="h-3 w-3 text-emerald-400 text-xs shrink-0" />
-        Cumplida
+        Agregada
         {pericia_detalle && <span className="ml-0.5 text-[10px] text-emerald-200/80 font-normal">({pericia_detalle})</span>}
+      </span>
+    );
+  }
+
+  if (isEnProceso) {
+    return (
+      <span key="badge-en-proceso" className="inline-flex items-center gap-1 rounded bg-purple-500/20 px-2 py-0.5 text-xs font-semibold text-purple-300 border border-purple-500/40 whitespace-nowrap" title={`${pericia_detalle || 'Pericia'} (En Proceso)`}>
+        <Activity className="h-3 w-3 text-purple-400 shrink-0" />
+        En Proceso
+        {pericia_detalle && <span className="ml-0.5 text-[10px] text-purple-200/80 font-normal">({pericia_detalle})</span>}
       </span>
     );
   }
@@ -487,7 +501,7 @@ export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', fin
 export function renderMultiplePericiasBadges(causa) {
   let periciasList = Array.isArray(causa.pericias) ? [...causa.pericias] : [];
   if (periciasList.length === 0 && (causa.pericia_fecha || causa.pericia_detalle)) {
-    periciasList = [{ id: 'p-legacy', fecha: causa.pericia_fecha, tipo: causa.pericia_detalle, finalizada: causa.pericia_finalizada }];
+    periciasList = [{ id: 'p-legacy', fecha: causa.pericia_fecha, tipo: causa.pericia_detalle, finalizada: causa.pericia_finalizada, estado: causa.pericia_estado }];
   }
 
   if (periciasList.length === 0) {
@@ -498,7 +512,7 @@ export function renderMultiplePericiasBadges(causa) {
     <div className="flex flex-col gap-1.5 py-0.5">
       {periciasList.map((p, idx) => (
         <div key={p.id || idx}>
-          {renderBadgePericia(p.fecha, p.tipo, p.finalizada)}
+          {renderBadgePericia(p.fecha, p.tipo, p.finalizada, p.estado)}
         </div>
       ))}
     </div>

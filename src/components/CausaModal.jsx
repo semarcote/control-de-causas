@@ -779,7 +779,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                 </div>
                 <div>
                   <span className="text-slate-500 block mb-0.5">Pericia Programada</span>
-                  {renderBadgePericia(causa.pericia_fecha, causa.pericia_detalle)}
+                  {renderBadgePericia(causa.pericia_fecha, causa.pericia_detalle, causa.pericia_finalizada, causa.pericia_estado)}
                 </div>
               </div>
 
