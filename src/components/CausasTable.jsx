@@ -38,9 +38,8 @@ export function formatAbbreviatedInicio(val = '') {
   if (lower.includes('loma verde')) return 'Subcom. Loma Verde';
   if (lower.includes('24 de febrero')) return 'Dest. 24 Feb';
   if (lower.includes('cazador')) return 'Dest. Cazador';
-  if (lower.includes('mujer escobar') || (lower.includes('mujer') && lower.includes('escobar'))) return 'Com. Mujer Escobar';
   if (lower.includes('mujer campana')) return 'Com. Mujer Campana';
-  if (lower.includes('mujer')) return 'Comisaría Mujer';
+  if (lower.includes('mujer escobar') || lower.includes('mujer')) return 'Com. Mujer Escobar';
   if (lower.includes('canal irigoyen') || lower.includes('irigoyen')) return 'Dest. Canal Irigoyen';
   if (lower.includes('alto los cardales') || lower.includes('cardales')) return 'Dest. Los Cardales';
   if (lower.includes('vial zárate') || lower.includes('vial zarate')) return 'Dest. Vial Zárate';
@@ -70,12 +69,16 @@ export function renderBadgeDenuncia(denuncia) {
   }
 
   if (lower.includes('mujer')) {
+    const isCampana = lower.includes('campana');
+    const label = isCampana ? 'Com. Mujer Campana' : 'Com. Mujer Escobar';
+    const fullTitle = isCampana ? 'Comisaría de La Mujer Campana' : 'Comisaría de La Mujer Escobar';
+
     return (
       <span
         className="inline-flex items-center gap-1.5 rounded-lg bg-pink-500/20 px-2.5 py-1 text-xs font-bold text-pink-300 border border-pink-500/40"
-        title="Comisaría de La Mujer"
+        title={fullTitle}
       >
-        Comisaría Mujer
+        {label}
       </span>
     );
   }
