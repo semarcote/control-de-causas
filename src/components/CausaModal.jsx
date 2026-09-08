@@ -460,29 +460,44 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
   };
 
   const handleAddActuacion = (e) => {
-    e.preventDefault();
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+
     const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const fechaReal = formatDisplayDate(newActuacionFecha || todayStr);
 
-    let updatedTramite = causa.tramite || '';
-    if (newActuacion.trim()) {
+    const baseTramite = formData.tramite !== undefined ? formData.tramite : (causa.tramite || '');
+    let updatedTramite = baseTramite;
+
+    if (newActuacion && newActuacion.trim()) {
       const formattedEntry = `${fechaReal} - ${newActuacion.trim()}`;
-      updatedTramite = updatedTramite ? `${updatedTramite} /// ${formattedEntry}` : formattedEntry;
+      updatedTramite = baseTramite ? `${baseTramite} /// ${formattedEntry}` : formattedEntry;
     }
+
+    const activeP = (periciasState || []).find(p => !p.finalizada && p.estado !== 'agregada') || (periciasState || [])[0];
 
     const updatedCausa = {
       ...formData,
       tramite: updatedTramite,
       pericias: periciasState,
+      pericia_fecha: activeP ? activeP.fecha : (formData.pericia_fecha || ''),
+      pericia_detalle: activeP ? activeP.tipo : (formData.pericia_detalle || ''),
+      pericia_finalizada: activeP ? (activeP.finalizada || activeP.estado === 'agregada') : false,
+      pericia_estado: activeP ? (activeP.estado || '') : '',
       revisado: todayStr,
       revisar_dias: newPlazoDias
     };
 
-    setFormData(updatedCausa);
-    onSave(updatedCausa);
-    setNewActuacion('');
-    setNewActuacionFecha(todayDefaultStr);
-    if (onClose) onClose();
+    try {
+      setFormData(updatedCausa);
+      if (onSave) onSave(updatedCausa);
+    } catch (err) {
+      console.error('Error in handleAddActuacion:', err);
+    } finally {
+      setNewActuacion('');
+      setNewActuacionFecha(todayDefaultStr);
+      if (onClose) onClose();
+    }
   };
 
   const handleModificarDatos = (e) => {
