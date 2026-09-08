@@ -11,6 +11,7 @@ export default function OrigenSelect({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value || '');
+  const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -20,6 +21,19 @@ export default function OrigenSelect({
       setInputValue(value || '');
     }
   }, [value, isOpen]);
+
+  // Position dropdown intelligently (drop up if near bottom of screen/container)
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < 260) {
+        setDropUp(true);
+      } else {
+        setDropUp(false);
+      }
+    }
+  }, [isOpen]);
 
   // Handle outside clicks to close dropdown
   useEffect(() => {
@@ -86,7 +100,7 @@ export default function OrigenSelect({
   return (
     <div ref={containerRef} className={`relative w-full ${className}`}>
       <div
-        className="relative flex items-center w-full rounded-xl bg-slate-950 border border-slate-800 focus-within:border-blue-500 transition shadow-sm"
+        className="relative flex items-center w-full rounded-xl bg-slate-950 border border-slate-800 focus-within:border-blue-500 transition shadow-sm cursor-pointer"
         onClick={() => {
           setIsOpen(true);
           if (inputRef.current) inputRef.current.focus();
@@ -122,7 +136,11 @@ export default function OrigenSelect({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute z-50 mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-900/95 backdrop-blur-md shadow-2xl overflow-hidden max-h-60 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-100">
+        <div
+          className={`absolute z-[100] w-full rounded-xl border border-slate-700 bg-slate-900/98 backdrop-blur-md shadow-2xl overflow-hidden max-h-60 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-100 ${
+            dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+          }`}
+        >
           {filteredOptions.length > 0 ? (
             <div className="py-1">
               {filteredOptions.map((opt) => {
@@ -134,7 +152,7 @@ export default function OrigenSelect({
                     onClick={() => handleSelectOption(opt)}
                     className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition cursor-pointer ${
                       isSelected
-                        ? 'bg-blue-600/20 text-blue-300 font-bold'
+                        ? 'bg-blue-600/25 text-blue-300 font-bold'
                         : 'text-slate-300 hover:bg-slate-800/90 hover:text-white'
                     }`}
                   >

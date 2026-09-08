@@ -648,7 +648,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-      <div className="glass-panel relative w-full max-w-3xl rounded-2xl border border-slate-700/80 bg-slate-900 shadow-2xl overflow-hidden my-8">
+      <div className="glass-panel relative w-full max-w-3xl rounded-2xl border border-slate-700/80 bg-slate-900 shadow-2xl overflow-visible my-8">
         
         {/* Header */}
         <div className="flex items-start justify-between border-b border-slate-800 bg-slate-950/80 p-5">
