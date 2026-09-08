@@ -38,10 +38,10 @@ export function formatAbbreviatedInicio(val = '') {
   if (lower.includes('loma verde')) return 'Subcom. Loma Verde';
   if (lower.includes('24 de febrero')) return 'Dest. 24 Feb';
   if (lower.includes('cazador')) return 'Dest. Cazador';
-  if (lower.includes('mujer campana')) return 'Com. Mujer Campana';
-  if (lower.includes('mujer escobar') || lower.includes('mujer')) return 'Com. Mujer Escobar';
-  if (lower.includes('canal irigoyen') || lower.includes('irigoyen')) return 'Dest. Canal Irigoyen';
-  if (lower.includes('alto los cardales') || lower.includes('cardales')) return 'Dest. Los Cardales';
+  if (lower.includes('mujer campana')) return 'C. Mujer Campana';
+  if (lower.includes('mujer escobar') || lower.includes('mujer')) return 'C. Mujer Escobar';
+  if (lower.includes('canal irigoyen') || lower.includes('irigoyen')) return 'Dest. Irigoyen';
+  if (lower.includes('alto los cardales') || lower.includes('cardales')) return 'Dest. Cardales';
   if (lower.includes('vial zárate') || lower.includes('vial zarate')) return 'Dest. Vial Zárate';
   if (lower.includes('vial pavón') || lower.includes('vial pavon')) return 'Dest. Vial Pavón';
   if (lower.includes('prefectura')) return 'Prefectura';
@@ -60,7 +60,7 @@ export function renderBadgeDenuncia(denuncia) {
   if (lower.includes('ciudadan')) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500/20 px-2.5 py-1 text-xs font-extrabold text-cyan-300 border border-cyan-500/50 shadow-sm"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500/20 px-2.5 py-1 text-xs font-extrabold text-cyan-300 border border-cyan-500/50 shadow-sm whitespace-nowrap"
         title="Denuncia Ciudadana"
       >
         Ciudadana
@@ -70,12 +70,12 @@ export function renderBadgeDenuncia(denuncia) {
 
   if (lower.includes('mujer')) {
     const isCampana = lower.includes('campana');
-    const label = isCampana ? 'Com. Mujer Campana' : 'Com. Mujer Escobar';
+    const label = isCampana ? 'C. Mujer Campana' : 'C. Mujer Escobar';
     const fullTitle = isCampana ? 'Comisaría de La Mujer Campana' : 'Comisaría de La Mujer Escobar';
 
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-lg bg-pink-500/20 px-2.5 py-1 text-xs font-bold text-pink-300 border border-pink-500/40"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-pink-500/20 px-2.5 py-1 text-xs font-bold text-pink-300 border border-pink-500/40 whitespace-nowrap"
         title={fullTitle}
       >
         {label}
@@ -86,7 +86,7 @@ export function renderBadgeDenuncia(denuncia) {
   if (lower === 'mesa') {
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/20 px-2.5 py-1 text-xs font-bold text-purple-300 border border-purple-500/40"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/20 px-2.5 py-1 text-xs font-bold text-purple-300 border border-purple-500/40 whitespace-nowrap"
         title="Mesa de Entradas"
       >
         Mesa
@@ -97,7 +97,7 @@ export function renderBadgeDenuncia(denuncia) {
   if (lower === 'mail') {
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-2.5 py-1 text-xs font-bold text-blue-300 border border-blue-500/40"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-2.5 py-1 text-xs font-bold text-blue-300 border border-blue-500/40 whitespace-nowrap"
         title="Denuncia por Mail"
       >
         Mail
@@ -107,7 +107,7 @@ export function renderBadgeDenuncia(denuncia) {
 
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-lg bg-slate-900/90 px-2.5 py-1 text-xs text-slate-200 border border-slate-700/60 font-semibold"
+      className="inline-flex items-center gap-1 rounded-lg bg-slate-900/90 px-2.5 py-1 text-xs text-slate-200 border border-slate-700/60 font-semibold whitespace-nowrap"
       title={`Dependencia: ${raw}`}
     >
       {formatAbbreviatedInicio(raw)}
