@@ -10,6 +10,7 @@ import UserManagementModal from './components/UserManagementModal';
 import ExpirationPanel, { getDaysRemaining, getExpirationEvents } from './components/ExpirationPanel';
 import AudienciasPanel from './components/AudienciasPanel';
 import GeminiAssistantModal from './components/GeminiAssistantModal';
+import EmailAlertModal from './components/EmailAlertModal';
 import {
   getStoredSheetsUrl,
   fetchCausasFromSheets,
@@ -241,6 +242,7 @@ export default function App() {
   };
 
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
   // Track which user's dataset is loaded in `causas` state
   const [loadedUserKey, setLoadedUserKey] = useState(() => getUserStorageKey(currentUser));
@@ -558,6 +560,7 @@ export default function App() {
         activePage={activePage}
         onPageChange={setActivePage}
         onNewCausa={() => setIsCreating(true)}
+        onOpenEmailModal={() => setIsEmailModalOpen(true)}
         onOpenGemini={() => setIsGeminiOpen(true)}
         onExportData={handleExportData}
         onResetData={handleResetData}
@@ -691,6 +694,14 @@ export default function App() {
           setSelectedCausa(causa);
           setIsGeminiOpen(false);
         }}
+      />
+
+      {/* Email Alerts Modal */}
+      <EmailAlertModal
+        isOpen={isEmailModalOpen}
+        onClose={() => setIsEmailModalOpen(false)}
+        causas={causas}
+        userName={currentUser?.name}
       />
 
     </div>

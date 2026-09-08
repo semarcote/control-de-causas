@@ -720,6 +720,11 @@ function doPost(e) {
       return jsonResponse(res);
     }
 
+    if (action === 'delete_trigger' || action === 'deleteTrigger') {
+      const res = eliminarActivadorDiarioAlertas();
+      return jsonResponse(res);
+    }
+
     return jsonResponse({ status: 'error', message: 'Acción no válida' });
   } catch (err) {
     return jsonResponse({ status: 'error', message: err.toString() });
@@ -840,8 +845,10 @@ function enviarAlertasVencimientos(emailDestino, diasMax, userName) {
 
   MailApp.sendEmail({
     to: emailDestino,
-    subject: '🚨 ALERTAS DE VENCIMIENTO (' + alertas.length + ') - CONTROL DE CAUSAS',
-    htmlBody: html
+    subject: '🚨 ALERTAS DE VENCIMIENTO (' + alertas.length + ') - CONTROL DE CAUSAS MPBA',
+    htmlBody: html,
+    name: 'Control de Causas — Ministerio Público Fiscal',
+    replyTo: 'no-reply@mpba.gov.ar'
   });
 
   return { status: 'success', message: 'Correo enviado exitosamente a ' + emailDestino, count: alertas.length };
@@ -864,6 +871,17 @@ function crearActivadorDiarioAlertas(emailDestino, diasMax) {
   PropertiesService.getScriptProperties().setProperty('EMAIL_ALERTA_DESTINO', emailDestino);
   PropertiesService.getScriptProperties().setProperty('DIAS_ALERTA_MAX', String(diasMax));
   return { status: 'success', message: 'Activador diario de alertas (8:00 AM) programado para ' + emailDestino };
+}
+
+function eliminarActivadorDiarioAlertas() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'ejecutarAlertaDiariaVencimientos') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  PropertiesService.getScriptProperties().deleteProperty('EMAIL_ALERTA_DESTINO');
+  return { status: 'success', message: 'Alerta diaria desactivada correctamente' };
 }
 
 function ejecutarAlertaDiariaVencimientos() {
@@ -1165,6 +1183,20 @@ export async function sendEmailAlerts(url, email, diasMax = 15, userName = null)
   return result;
 }
 
+export const TRIGGER_STATUS_KEY = 'control_causas_daily_trigger_active';
+
+export function getStoredTriggerStatus() {
+  return localStorage.getItem(TRIGGER_STATUS_KEY) === 'true';
+}
+
+export function setStoredTriggerStatus(active) {
+  if (active) {
+    localStorage.setItem(TRIGGER_STATUS_KEY, 'true');
+  } else {
+    localStorage.removeItem(TRIGGER_STATUS_KEY);
+  }
+}
+
 /**
  * Programar activador diario automático a las 8:00 AM en Google Apps Script
  */
@@ -1179,5 +1211,20 @@ export async function createTriggerAlerts(url, email, diasMax = 15) {
   });
 
   setStoredEmailConfig(email);
+  setStoredTriggerStatus(true);
+  return result;
+}
+
+/**
+ * Desactivar activador diario en Google Apps Script
+ */
+export async function deleteTriggerAlerts(url) {
+  if (!url) throw new Error('URL de Google Apps Script no configurada');
+
+  const result = await postToAppsScript(url, {
+    action: 'delete_trigger'
+  });
+
+  setStoredTriggerStatus(false);
   return result;
 }

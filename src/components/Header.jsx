@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Scale, Plus, Download, RefreshCw, Clock, ShieldAlert, Users, LogOut, Calendar, Files, AlertTriangle, FileSpreadsheet, Sparkles } from 'lucide-react';
+import { Scale, Plus, Download, RefreshCw, Clock, ShieldAlert, Users, LogOut, Calendar, Files, AlertTriangle, FileSpreadsheet, Sparkles, Mail } from 'lucide-react';
 
 export default function Header({
   totalCausas,
@@ -10,6 +10,7 @@ export default function Header({
   activePage,
   onPageChange,
   onNewCausa,
+  onOpenEmailModal,
   onOpenGemini,
   onExportData,
   onResetData,
@@ -53,6 +54,17 @@ export default function Header({
 
         {/* Quick Action Buttons */}
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          {onOpenEmailModal && (
+            <button
+              onClick={onOpenEmailModal}
+              className="flex items-center gap-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3.5 py-2 text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+              title="Configurar y enviar alertas por correo electrónico"
+            >
+              <Mail className="h-4 w-4" />
+              <span className="hidden md:inline">Alertas por Email</span>
+            </button>
+          )}
+
           <button
             onClick={onNewCausa}
             className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-blue-600/30 ring-1 ring-blue-400/40 transition-all hover:scale-[1.02] active:scale-[0.98]"
