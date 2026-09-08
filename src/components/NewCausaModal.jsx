@@ -412,12 +412,33 @@ export default function NewCausaModal({ onClose, onCreate }) {
                   
                   setFormData(prev => ({
                     ...prev,
-                    denunciado_en: val,
+                    denunciado_en: val === 'Otro' ? (customInicio || 'Otro') : val,
                     sumario: isAutoSumario ? 'SÍ' : prev.sumario,
                     revisar_dias: isCiudadana ? '5' : (prev.revisar_dias === '5' ? '10' : (prev.revisar_dias || '10'))
                   }));
                 }}
               />
+
+              {/* Recuadro desplegable al elegir "Otro" o indicar dependencia personalizada */}
+              {(formData.denunciado_en === 'Otro' || (!INICIO_OPTIONS.includes(formData.denunciado_en) && formData.denunciado_en !== '')) && (
+                <div className="mt-2 space-y-1">
+                  <input
+                    type="text"
+                    placeholder="Escriba la otra dependencia o lugar..."
+                    value={customInicio || (formData.denunciado_en !== 'Otro' ? formData.denunciado_en : '')}
+                    onChange={(e) => {
+                      const typed = e.target.value;
+                      setCustomInicio(typed);
+                      setFormData(prev => ({
+                        ...prev,
+                        denunciado_en: typed || 'Otro'
+                      }));
+                    }}
+                    className="w-full rounded-xl bg-slate-950 p-2 text-xs text-white placeholder-slate-500 border border-blue-500/50 focus:border-blue-400 focus:outline-none shadow-sm uppercase"
+                  />
+                  <p className="text-[10px] text-blue-400">Especifica la dependencia personalizada</p>
+                </div>
+              )}
             </div>
           </div>
 

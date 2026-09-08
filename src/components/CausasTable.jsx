@@ -10,7 +10,7 @@ export const INICIO_OPTIONS = [
   'Subcomisaría Loma Verde',
   'Destacamento 24 de Febrero',
   'Destacamento Cazador',
-  'Comisaría de La Mujer',
+  'Comisaría de La Mujer Escobar',
   'Comisaría de La Mujer Campana',
   'Campana',
   'Destacamento Canal Irigoyen',
@@ -18,6 +18,7 @@ export const INICIO_OPTIONS = [
   'Destacamento Vial Zárate',
   'Destacamento Vial Pavón',
   'Prefectura',
+  'Gendarmería',
   'Mesa',
   'Mail',
   'Ciudadana',
@@ -37,6 +38,7 @@ export function formatAbbreviatedInicio(val = '') {
   if (lower.includes('loma verde')) return 'Subcom. Loma Verde';
   if (lower.includes('24 de febrero')) return 'Dest. 24 Feb';
   if (lower.includes('cazador')) return 'Dest. Cazador';
+  if (lower.includes('mujer escobar') || (lower.includes('mujer') && lower.includes('escobar'))) return 'Com. Mujer Escobar';
   if (lower.includes('mujer campana')) return 'Com. Mujer Campana';
   if (lower.includes('mujer')) return 'Comisaría Mujer';
   if (lower.includes('canal irigoyen') || lower.includes('irigoyen')) return 'Dest. Canal Irigoyen';
@@ -44,6 +46,7 @@ export function formatAbbreviatedInicio(val = '') {
   if (lower.includes('vial zárate') || lower.includes('vial zarate')) return 'Dest. Vial Zárate';
   if (lower.includes('vial pavón') || lower.includes('vial pavon')) return 'Dest. Vial Pavón';
   if (lower.includes('prefectura')) return 'Prefectura';
+  if (lower.includes('gendarmer')) return 'Gendarmería';
   if (lower === 'campana' || lower.includes('comisaría campana') || lower.includes('comisaria campana')) return 'Campana';
 
   return raw;
