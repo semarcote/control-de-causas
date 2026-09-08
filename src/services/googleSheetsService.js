@@ -811,7 +811,12 @@ function enviarAlertasVencimientos(emailDestino, diasMax, userName, customEvents
       if (Array.isArray(causa.pericias)) {
         causa.pericias.forEach(function(p) {
           var pst = String(p.estado || '').toLowerCase().trim();
-          if (pst === 'finalizada' || pst === 'cumplida' || pst === 'agregada' || p.finalizada) return;
+          var isExcluded = p.finalizada === true ||
+            pst === 'finalizada' || pst === 'cumplida' || pst === 'agregada' ||
+            pst === 'en_proceso' || pst === 'en proceso' ||
+            pst.indexOf('proceso') !== -1 || pst.indexOf('agregad') !== -1 ||
+            pst.indexOf('cumpli') !== -1 || pst.indexOf('finaliz') !== -1;
+          if (isExcluded) return;
           if (p.fecha) {
             var dP = getDaysRemainingScript(p.fecha);
             if (dP !== null && dP <= diasMax) {

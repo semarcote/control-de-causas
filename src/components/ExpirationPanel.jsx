@@ -85,7 +85,12 @@ export function getExpirationEvents(causas) {
     periciasList.forEach((p, idx) => {
       // Exclude finalized/cumplidas/agregadas and en_proceso pericias from alert panel
       const st = String(p.estado || '').toLowerCase().trim();
-      if (p.finalizada === true || st === 'finalizada' || st === 'cumplida' || st === 'agregada' || st === 'en_proceso' || st === 'en proceso') return;
+      const isExcluded = p.finalizada === true ||
+        st === 'finalizada' || st === 'cumplida' || st === 'agregada' ||
+        st === 'en_proceso' || st === 'en proceso' ||
+        st.includes('proceso') || st.includes('agregad') ||
+        st.includes('cumpli') || st.includes('finaliz');
+      if (isExcluded) return;
 
       if (p.fecha) {
         const subDates = String(p.fecha).split(/[,;]/).map(d => d.trim()).filter(Boolean);
