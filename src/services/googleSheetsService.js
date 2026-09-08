@@ -708,8 +708,9 @@ function doPost(e) {
     if (action === 'send_email_alert' || action === 'sendEmailAlert') {
       const targetEmail = contents.email || contents.userEmail;
       const diasMax = contents.diasMax || 15;
+      const customEvents = contents.events || null;
       if (!targetEmail) throw new Error('Se requiere un correo electrónico de destino');
-      const res = enviarAlertasVencimientos(targetEmail, diasMax, userName);
+      const res = enviarAlertasVencimientos(targetEmail, diasMax, userName, customEvents);
       return jsonResponse(res);
     }
 
@@ -751,58 +752,74 @@ function getDaysRemainingScript(dateStr) {
   return Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24));
 }
 
-function enviarAlertasVencimientos(emailDestino, diasMax, userName) {
+function enviarAlertasVencimientos(emailDestino, diasMax, userName, customEvents) {
   if (!emailDestino) return { status: 'error', message: 'Email de destino no especificado' };
   diasMax = diasMax || 15;
-  var sheet = getOrCreateSheet(userName);
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return { status: 'success', message: 'No hay causas registradas para enviar reportes' };
-
-  var headersMap = {};
-  var hRow = data[0];
-  for (var h = 0; h < hRow.length; h++) {
-    var colName = String(hRow[h] || '').trim().toLowerCase();
-    if (colName) headersMap[colName] = h;
-  }
-
   var alertas = [];
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    var causa = rowToCausa(row, headersMap);
-    var st = String(causa.estado || '').toLowerCase().trim();
-    var tr = String(causa.tramite || '').toLowerCase().trim();
-    if (st.includes('archiv') || st.includes('finaliz') || tr.includes('archiv') || tr.includes('finaliz')) continue;
 
-    // Vencimiento PP
-    var isDet = causa.detenido === 'SI' || causa.detenido === 'SÍ';
-    var vPP = causa.pp_prorrogada ? (causa.vencimiento_pp2 || causa.vencimiento_pp1) : causa.vencimiento_pp1;
-    if ((isDet || (causa.estado_pp && String(causa.estado_pp).toLowerCase().includes('presentad'))) && vPP) {
-      var dPP = getDaysRemainingScript(vPP);
-      if (dPP !== null && dPP <= diasMax) {
-        alertas.push({ causa: causa, tipo: causa.pp_prorrogada ? '2º Vencimiento PP (Prórroga)' : '1º Vencimiento PP', fecha: vPP, dias: dPP });
-      }
+  if (Array.isArray(customEvents) && customEvents.length > 0) {
+    alertas = customEvents.map(function(item) {
+      return {
+        causa: {
+          ipp: item.ipp || (item.causa ? item.causa.ipp : ''),
+          caratula: item.caratula || (item.causa ? item.causa.caratula : ''),
+          sumario: item.sumario || (item.causa ? item.causa.sumario : '')
+        },
+        tipo: item.tipo || 'Vencimiento Procesal',
+        fecha: item.fecha || '',
+        dias: item.days !== undefined ? item.days : (item.dias !== undefined ? item.dias : 0)
+      };
+    });
+  } else {
+    var sheet = getOrCreateSheet(userName);
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return { status: 'success', message: 'No hay causas registradas para enviar reportes' };
+
+    var headersMap = {};
+    var hRow = data[0];
+    for (var h = 0; h < hRow.length; h++) {
+      var colName = String(hRow[h] || '').trim().toLowerCase();
+      if (colName) headersMap[colName] = h;
     }
 
-    // Vencimiento IPP
-    if (causa.vencimiento_ipp) {
-      var dIPP = getDaysRemainingScript(causa.vencimiento_ipp);
-      if (dIPP !== null && dIPP <= diasMax) {
-        alertas.push({ causa: causa, tipo: 'Vencimiento IPP', fecha: causa.vencimiento_ipp, dias: dIPP });
-      }
-    }
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var causa = rowToCausa(row, headersMap);
+      var st = String(causa.estado || '').toLowerCase().trim();
+      var tr = String(causa.tramite || '').toLowerCase().trim();
+      if (st.includes('archiv') || st.includes('finaliz') || tr.includes('archiv') || tr.includes('finaliz')) continue;
 
-    // Pericias
-    if (Array.isArray(causa.pericias)) {
-      causa.pericias.forEach(function(p) {
-        var pst = String(p.estado || '').toLowerCase().trim();
-        if (pst === 'finalizada' || pst === 'cumplida' || pst === 'agregada' || p.finalizada) return;
-        if (p.fecha) {
-          var dP = getDaysRemainingScript(p.fecha);
-          if (dP !== null && dP <= diasMax) {
-            alertas.push({ causa: causa, tipo: 'Pericia: ' + (p.tipo || 'Procesal'), fecha: p.fecha, dias: dP });
-          }
+      // Vencimiento PP
+      var isDet = causa.detenido === 'SI' || causa.detenido === 'SÍ';
+      var vPP = causa.pp_prorrogada ? (causa.vencimiento_pp2 || causa.vencimiento_pp1) : causa.vencimiento_pp1;
+      if ((isDet || (causa.estado_pp && String(causa.estado_pp).toLowerCase().includes('presentad'))) && vPP) {
+        var dPP = getDaysRemainingScript(vPP);
+        if (dPP !== null && dPP <= diasMax) {
+          alertas.push({ causa: causa, tipo: causa.pp_prorrogada ? '2º Vencimiento PP (Prórroga)' : '1º Vencimiento PP', fecha: vPP, dias: dPP });
         }
-      });
+      }
+
+      // Vencimiento IPP
+      if (causa.vencimiento_ipp) {
+        var dIPP = getDaysRemainingScript(causa.vencimiento_ipp);
+        if (dIPP !== null && dIPP <= diasMax) {
+          alertas.push({ causa: causa, tipo: 'Vencimiento IPP', fecha: causa.vencimiento_ipp, dias: dIPP });
+        }
+      }
+
+      // Pericias
+      if (Array.isArray(causa.pericias)) {
+        causa.pericias.forEach(function(p) {
+          var pst = String(p.estado || '').toLowerCase().trim();
+          if (pst === 'finalizada' || pst === 'cumplida' || pst === 'agregada' || p.finalizada) return;
+          if (p.fecha) {
+            var dP = getDaysRemainingScript(p.fecha);
+            if (dP !== null && dP <= diasMax) {
+              alertas.push({ causa: causa, tipo: 'Pericia: ' + (p.tipo || 'Procesal'), fecha: p.fecha, dias: dP });
+            }
+          }
+        });
+      }
     }
   }
 
@@ -1167,7 +1184,7 @@ export function setStoredEmailConfig(email) {
 /**
  * Disparar envío de correo electrónico con alertas de vencimiento desde Google Apps Script
  */
-export async function sendEmailAlerts(url, email, diasMax = 15, userName = null) {
+export async function sendEmailAlerts(url, email, diasMax = 15, userName = null, customEvents = null) {
   if (!url) throw new Error('URL de Google Apps Script no configurada');
   if (!email) throw new Error('Debes ingresar una dirección de correo de destino');
 
@@ -1176,7 +1193,8 @@ export async function sendEmailAlerts(url, email, diasMax = 15, userName = null)
     action: 'send_email_alert',
     email: email.trim(),
     diasMax: Number(diasMax) || 15,
-    userName: targetUserName
+    userName: targetUserName,
+    events: customEvents
   });
   
   setStoredEmailConfig(email);

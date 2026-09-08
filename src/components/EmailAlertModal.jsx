@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Send, Check, CheckCircle2, Loader2, BellOff, X, AlertTriangle, Copy, HelpCircle } from 'lucide-react';
+import { getExpirationEvents } from './ExpirationPanel';
 import {
   sendEmailAlerts,
   getStoredEmailConfig,
@@ -49,7 +50,20 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
     setShowScriptGuide(false);
     try {
       const sheetsUrl = getStoredSheetsUrl();
-      const res = await sendEmailAlerts(sheetsUrl, emailInput.trim(), diasMaxInput, userName);
+      
+      // Extraer exactamente los mismos vencimientos procesales que se visualizan en la pantalla
+      const allEvents = getExpirationEvents(causas);
+      const targetEvents = allEvents
+        .filter(evt => evt.days <= diasMaxInput)
+        .map(evt => ({
+          ipp: evt.causa ? evt.causa.ipp : '',
+          caratula: evt.causa ? (evt.causa.caratula || evt.causa.sumario || '') : '',
+          tipo: evt.tipo || 'Vencimiento',
+          fecha: evt.fecha || '',
+          days: evt.days
+        }));
+
+      const res = await sendEmailAlerts(sheetsUrl, emailInput.trim(), diasMaxInput, userName, targetEvents);
       setEmailStatus({ type: 'success', text: res.message || 'Reporte enviado con éxito.' });
     } catch (err) {
       const isInvalidAction = err.message && err.message.toLowerCase().includes('acción no válida');
