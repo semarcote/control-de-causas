@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Clock, FileText, Calendar, Edit3, Plus, Shield, MapPin, Gavel, CheckCircle2, AlertTriangle, Send, RotateCcw, Trash2, Unlock, UserCheck, ChevronLeft, ChevronRight, ArrowRight, Activity } from 'lucide-react';
 import { renderBadgeEstado, isFinalizedState, isAbusoSexual, renderBadgePericia, renderMultiplePericiasBadges, renderBadgePP, calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, extractAndFormatDateFromActuacion, isDateInFuture, isValidDateString, INICIO_OPTIONS, formatDisplayDate, parseAnyDate, isPPMaxDaysExceeded, calculate4MonthsIPPDate } from './CausasTable';
+import OrigenSelect from './OrigenSelect';
 
 const monthNames = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -1989,60 +1990,18 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                       <label className="block font-semibold text-slate-300 mb-1">
                         Denuncia (Lugar de Inicio)
                       </label>
-                      <select
-                        value={
-                          INICIO_OPTIONS.includes(formData.denunciado_en)
-                            ? formData.denunciado_en
-                            : (formData.denunciado_en ? 'Otro' : '')
-                        }
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const norm = val.trim().toLowerCase();
+                      <OrigenSelect
+                        value={formData.denunciado_en}
+                        onChange={(val) => {
+                          const norm = (val || '').trim().toLowerCase();
                           const isAutoSumario = norm === 'mesa' || norm === 'mail' || norm === 'ciudadana';
-                          if (val === 'Otro') {
-                            setFormData(prev => ({
-                              ...prev,
-                              denunciado_en: customInicio || 'Otro',
-                              sumario: isAutoSumario ? (prev.sumario?.trim() || 'SÍ') : prev.sumario
-                            }));
-                          } else {
-                            setFormData(prev => ({
-                              ...prev,
-                              denunciado_en: val,
-                              sumario: isAutoSumario ? (prev.sumario?.trim() || 'SÍ') : prev.sumario
-                            }));
-                          }
+                          setFormData(prev => ({
+                            ...prev,
+                            denunciado_en: val,
+                            sumario: isAutoSumario ? (prev.sumario?.trim() || 'SÍ') : prev.sumario
+                          }));
                         }}
-                        className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
-                      >
-                        <option value="">- Seleccionar Origen -</option>
-                        {INICIO_OPTIONS.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-
-                      {/* Input desplegable al elegir "Otro" */}
-                      {(formData.denunciado_en === 'Otro' || (!INICIO_OPTIONS.includes(formData.denunciado_en) && formData.denunciado_en !== '')) && (
-                        <div className="mt-2 space-y-1">
-                          <input
-                            type="text"
-                            placeholder="Escriba la otra dependencia o lugar..."
-                            value={customInicio}
-                            onChange={(e) => {
-                              const typed = e.target.value;
-                              setCustomInicio(typed);
-                              setFormData(prev => ({
-                                ...prev,
-                                denunciado_en: typed || 'Otro'
-                              }));
-                            }}
-                            className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white placeholder-slate-500 border border-blue-500/50 focus:border-blue-400 focus:outline-none shadow-sm"
-                          />
-                          <p className="text-[10px] text-blue-400">Especifica la dependencia personalizada</p>
-                        </div>
-                      )}
+                      />
                     </div>
                   </div>
                 </>

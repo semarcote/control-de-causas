@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Plus, Scale, FileText, Unlock, UserCheck, AlertTriangle } from 'lucide-react';
 import { calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, formatCaratulaMask, isDateInFuture, isValidDateString, INICIO_OPTIONS, isPPMaxDaysExceeded, calculate4MonthsIPPDate } from './CausasTable';
+import OrigenSelect from './OrigenSelect';
 
 export default function NewCausaModal({ onClose, onCreate }) {
   const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -402,62 +403,21 @@ export default function NewCausaModal({ onClose, onCreate }) {
 
             <div>
               <label className="block font-semibold text-slate-300 mb-1">Denuncia (Lugar de Inicio)</label>
-              <select
-                value={
-                  INICIO_OPTIONS.includes(formData.denunciado_en)
-                    ? formData.denunciado_en
-                    : (formData.denunciado_en ? 'Otro' : '')
-                }
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const norm = val.trim().toLowerCase();
+              <OrigenSelect
+                value={formData.denunciado_en}
+                onChange={(val) => {
+                  const norm = (val || '').trim().toLowerCase();
                   const isAutoSumario = norm === 'mesa' || norm === 'mail' || norm === 'ciudadana';
                   const isCiudadana = norm.includes('ciudadan');
                   
-                  if (val === 'Otro') {
-                    setFormData(prev => ({
-                      ...prev,
-                      denunciado_en: customInicio || 'Otro',
-                      sumario: isAutoSumario ? 'SÍ' : prev.sumario,
-                      revisar_dias: '10'
-                    }));
-                  } else {
-                    setFormData(prev => ({
-                      ...prev,
-                      denunciado_en: val,
-                      sumario: isAutoSumario ? 'SÍ' : prev.sumario,
-                      revisar_dias: isCiudadana ? '5' : (prev.revisar_dias === '5' ? '10' : (prev.revisar_dias || '10'))
-                    }));
-                  }
+                  setFormData(prev => ({
+                    ...prev,
+                    denunciado_en: val,
+                    sumario: isAutoSumario ? 'SÍ' : prev.sumario,
+                    revisar_dias: isCiudadana ? '5' : (prev.revisar_dias === '5' ? '10' : (prev.revisar_dias || '10'))
+                  }));
                 }}
-                className="w-full rounded-xl bg-slate-950 p-2.5 text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="">- Seleccionar Origen -</option>
-                {INICIO_OPTIONS.map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-
-              {/* Input desplegable al elegir "Otro" */}
-              {(formData.denunciado_en === 'Otro' || (!INICIO_OPTIONS.includes(formData.denunciado_en) && formData.denunciado_en !== '')) && (
-                <div className="mt-2 space-y-1">
-                  <input
-                    type="text"
-                    placeholder="Escriba la otra dependencia o lugar..."
-                    value={customInicio}
-                    onChange={(e) => {
-                      const typed = e.target.value.toUpperCase();
-                      setCustomInicio(typed);
-                      setFormData(prev => ({
-                        ...prev,
-                        denunciado_en: typed || 'Otro'
-                      }));
-                    }}
-                    className="w-full rounded-xl bg-slate-950 p-2 text-xs text-white placeholder-slate-500 border border-blue-500/50 focus:border-blue-400 focus:outline-none shadow-sm uppercase"
-                  />
-                  <p className="text-[10px] text-blue-400">Especifica la dependencia personalizada</p>
-                </div>
-              )}
+              />
             </div>
           </div>
 
