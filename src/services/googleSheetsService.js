@@ -1173,16 +1173,77 @@ export async function deleteUserFromSheetsTab(url, user) {
 }
 
 export const EMAIL_CONFIG_KEY = 'control_causas_email_config';
+export const TRIGGER_STATUS_KEY = 'control_causas_daily_trigger_active';
 
-export function getStoredEmailConfig() {
-  return localStorage.getItem(EMAIL_CONFIG_KEY) || '';
+export function getStoredEmailConfig(userName = null) {
+  // Limpiar la clave global heredada si contenía el email de Marcote para evitar filtración a otros usuarios
+  const legacyGlobal = localStorage.getItem(EMAIL_CONFIG_KEY);
+  if (legacyGlobal && legacyGlobal.includes('smarcote')) {
+    localStorage.removeItem(EMAIL_CONFIG_KEY);
+  }
+
+  if (userName) {
+    const userKey = `${EMAIL_CONFIG_KEY}_${String(userName).trim().toUpperCase().replace(/[^A-Z0-9]/g, '_')}`;
+    const stored = localStorage.getItem(userKey);
+    if (stored !== null) return stored;
+
+    // Solo Sebastián Marcote tiene su email pre-cargado por defecto
+    const upperName = String(userName).toUpperCase();
+    if (upperName.includes('MARCOTE') || upperName.includes('SEBASTIAN') || upperName.includes('SEBASTIÁN')) {
+      return 'smarcote@mpba.gov.ar';
+    }
+
+    // Todos los demás usuarios comienzan con el campo de correo completamente vacío ("")
+    return '';
+  }
+
+  return '';
 }
 
-export function setStoredEmailConfig(email) {
-  if (email) {
-    localStorage.setItem(EMAIL_CONFIG_KEY, email.trim());
+export function setStoredEmailConfig(email, userName = null) {
+  const cleanEmail = email ? email.trim() : '';
+  if (userName) {
+    const userKey = `${EMAIL_CONFIG_KEY}_${String(userName).trim().toUpperCase().replace(/[^A-Z0-9]/g, '_')}`;
+    if (cleanEmail) {
+      localStorage.setItem(userKey, cleanEmail);
+    } else {
+      localStorage.removeItem(userKey);
+    }
+  } else if (cleanEmail) {
+    localStorage.setItem(EMAIL_CONFIG_KEY, cleanEmail);
   } else {
     localStorage.removeItem(EMAIL_CONFIG_KEY);
+  }
+}
+
+export function getStoredTriggerStatus(userName = null) {
+  if (userName) {
+    const userKey = `${TRIGGER_STATUS_KEY}_${String(userName).trim().toUpperCase().replace(/[^A-Z0-9]/g, '_')}`;
+    const stored = localStorage.getItem(userKey);
+    if (stored !== null) return stored === 'true';
+
+    const upperName = String(userName).toUpperCase();
+    if (upperName.includes('MARCOTE') || upperName.includes('SEBASTIAN') || upperName.includes('SEBASTIÁN')) {
+      return localStorage.getItem(TRIGGER_STATUS_KEY) === 'true';
+    }
+    return false;
+  }
+  return localStorage.getItem(TRIGGER_STATUS_KEY) === 'true';
+}
+
+export function setStoredTriggerStatus(active, userName = null) {
+  if (userName) {
+    const userKey = `${TRIGGER_STATUS_KEY}_${String(userName).trim().toUpperCase().replace(/[^A-Z0-9]/g, '_')}`;
+    if (active) {
+      localStorage.setItem(userKey, 'true');
+    } else {
+      localStorage.removeItem(userKey);
+    }
+  }
+  if (active) {
+    localStorage.setItem(TRIGGER_STATUS_KEY, 'true');
+  } else {
+    localStorage.removeItem(TRIGGER_STATUS_KEY);
   }
 }
 
@@ -1202,28 +1263,14 @@ export async function sendEmailAlerts(url, email, diasMax = 15, userName = null,
     events: customEvents
   });
   
-  setStoredEmailConfig(email);
+  setStoredEmailConfig(email, userName);
   return result;
-}
-
-export const TRIGGER_STATUS_KEY = 'control_causas_daily_trigger_active';
-
-export function getStoredTriggerStatus() {
-  return localStorage.getItem(TRIGGER_STATUS_KEY) === 'true';
-}
-
-export function setStoredTriggerStatus(active) {
-  if (active) {
-    localStorage.setItem(TRIGGER_STATUS_KEY, 'true');
-  } else {
-    localStorage.removeItem(TRIGGER_STATUS_KEY);
-  }
 }
 
 /**
  * Programar activador diario automático a las 8:00 AM en Google Apps Script
  */
-export async function createTriggerAlerts(url, email, diasMax = 15) {
+export async function createTriggerAlerts(url, email, diasMax = 15, userName = null) {
   if (!url) throw new Error('URL de Google Apps Script no configurada');
   if (!email) throw new Error('Debes ingresar una dirección de correo de destino');
 
@@ -1233,21 +1280,21 @@ export async function createTriggerAlerts(url, email, diasMax = 15) {
     diasMax: Number(diasMax) || 15
   });
 
-  setStoredEmailConfig(email);
-  setStoredTriggerStatus(true);
+  setStoredEmailConfig(email, userName);
+  setStoredTriggerStatus(true, userName);
   return result;
 }
 
 /**
  * Desactivar activador diario en Google Apps Script
  */
-export async function deleteTriggerAlerts(url) {
+export async function deleteTriggerAlerts(url, userName = null) {
   if (!url) throw new Error('URL de Google Apps Script no configurada');
 
   const result = await postToAppsScript(url, {
     action: 'delete_trigger'
   });
 
-  setStoredTriggerStatus(false);
+  setStoredTriggerStatus(false, userName);
   return result;
 }

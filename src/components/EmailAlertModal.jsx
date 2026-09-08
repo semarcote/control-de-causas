@@ -23,15 +23,13 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
 
   useEffect(() => {
     if (isOpen) {
-      const savedEmail = getStoredEmailConfig();
-      if (savedEmail) {
-        setEmailInput(savedEmail);
-      }
-      setIsTriggerActive(getStoredTriggerStatus());
+      const savedEmail = getStoredEmailConfig(userName);
+      setEmailInput(savedEmail || '');
+      setIsTriggerActive(getStoredTriggerStatus(userName));
       setEmailStatus(null);
       setShowScriptGuide(false);
     }
-  }, [isOpen]);
+  }, [isOpen, userName]);
 
   if (!isOpen) return null;
 
@@ -92,12 +90,12 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
 
       if (isTriggerActive) {
         // Desactivar alerta diaria
-        const res = await deleteTriggerAlerts(sheetsUrl);
+        const res = await deleteTriggerAlerts(sheetsUrl, userName);
         setIsTriggerActive(false);
         setEmailStatus({ type: 'success', text: res.message || 'Alerta diaria desactivada correctamente.' });
       } else {
         // Activar alerta diaria
-        const res = await createTriggerAlerts(sheetsUrl, emailInput.trim(), diasMaxInput);
+        const res = await createTriggerAlerts(sheetsUrl, emailInput.trim(), diasMaxInput, userName);
         setIsTriggerActive(true);
         setEmailStatus({ type: 'success', text: res.message || 'Alerta diaria (8:00 AM) activada correctamente.' });
       }

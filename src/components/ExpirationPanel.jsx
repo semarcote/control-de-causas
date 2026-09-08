@@ -115,7 +115,7 @@ export function getExpirationEvents(causas) {
   return events.sort((a, b) => a.days - b.days);
 }
 
-export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, onSelectFilter }) {
+export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, onSelectFilter, userName }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [tabFilter, setTabFilter] = useState('15dias'); // '15dias' | '30dias' | 'vencidos' | 'todos'
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -126,11 +126,9 @@ export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, o
   const [emailStatus, setEmailStatus] = useState(null); // null | { type: 'success'|'error', text: string }
 
   useEffect(() => {
-    const savedEmail = getStoredEmailConfig();
-    if (savedEmail) {
-      setEmailInput(savedEmail);
-    }
-  }, []);
+    const savedEmail = getStoredEmailConfig(userName);
+    setEmailInput(savedEmail || '');
+  }, [userName, showEmailModal]);
 
   const handleSendEmail = async (e) => {
     e.preventDefault();
@@ -140,7 +138,7 @@ export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, o
     setEmailStatus(null);
     try {
       const sheetsUrl = getStoredSheetsUrl();
-      const res = await sendEmailAlerts(sheetsUrl, emailInput.trim(), diasMaxInput);
+      const res = await sendEmailAlerts(sheetsUrl, emailInput.trim(), diasMaxInput, userName);
       setEmailStatus({ type: 'success', text: res.message || 'Reporte enviado con éxito.' });
     } catch (err) {
       setEmailStatus({ type: 'error', text: err.message || 'Error al enviar el reporte.' });
@@ -156,7 +154,7 @@ export default function ExpirationPanel({ causas, onSelectCausa, activeFilter, o
     setEmailStatus(null);
     try {
       const sheetsUrl = getStoredSheetsUrl();
-      const res = await createTriggerAlerts(sheetsUrl, emailInput.trim(), diasMaxInput);
+      const res = await createTriggerAlerts(sheetsUrl, emailInput.trim(), diasMaxInput, userName);
       setEmailStatus({ type: 'success', text: res.message || 'Activador diario de alertas (8:00 AM) programado.' });
     } catch (err) {
       setEmailStatus({ type: 'error', text: err.message || 'Error al configurar el activador diario.' });

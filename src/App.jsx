@@ -612,6 +612,7 @@ export default function App() {
           <ExpirationPanel
             causas={causas}
             onSelectCausa={(causa) => setSelectedCausa(causa)}
+            userName={currentUser?.name}
           />
         )}
 
