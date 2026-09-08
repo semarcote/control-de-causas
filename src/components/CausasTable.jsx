@@ -1066,7 +1066,7 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
               const isCiudadana = (causa.denunciado_en || '').trim().toLowerCase().includes('ciudadan');
               const isCiudadanaEnTramite = isCiudadana && !finalized;
               const ippVal = getVencimientoIPP(causa);
-              const hasIPP = !!(ippVal && ippVal.trim() !== '' && ippVal !== '-' && ippVal !== 'Sin fecha');
+              const hasIPP = !!(ippVal && ippVal.trim() !== '' && ippVal !== '-' && ippVal !== 'Sin fecha') || causa.indagatoria === 'SI' || causa.indagatoria === 'SÍ';
               const isIPPEnTramite = hasIPP && !finalized;
               const hasSumario = causaHasSumario(causa);
 
@@ -1085,6 +1085,8 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                       ? 'bg-rose-950/40 border-l-4 border-l-rose-500 hover:bg-rose-900/50 text-rose-100 shadow-[0_0_18px_rgba(244,63,94,0.2)]'
                       : isDetenidoEnTramite
                       ? 'bg-emerald-950/60 border-l-4 border-l-emerald-400 hover:bg-emerald-900/70 text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)] ring-1 ring-emerald-500/30'
+                      : isIPPEnTramite
+                      ? 'bg-amber-950/40 border-l-4 border-l-amber-400 hover:bg-amber-900/50 text-amber-100 shadow-[0_0_18px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/20'
                       : isCiudadanaEnTramite
                       ? 'bg-cyan-950/40 border-l-4 border-l-cyan-400 hover:bg-cyan-900/50 text-cyan-100 shadow-[0_0_18px_rgba(6,182,212,0.2)] ring-1 ring-cyan-500/20'
                       : 'hover:bg-slate-800/40'
@@ -1101,6 +1103,8 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                           ? 'text-rose-400 font-extrabold' 
                           : isDetenidoEnTramite
                           ? 'text-emerald-400 font-extrabold'
+                          : isIPPEnTramite
+                          ? 'text-amber-300 font-extrabold'
                           : isCiudadanaEnTramite
                           ? 'text-cyan-300 font-extrabold'
                           : 'text-white font-bold group-hover:text-slate-200'
