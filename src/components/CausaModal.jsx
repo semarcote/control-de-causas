@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, Clock, FileText, Calendar, Edit3, Plus, Shield, MapPin, Gavel, CheckCircle2, AlertTriangle, Send, RotateCcw, Trash2, Unlock, UserCheck, ChevronLeft, ChevronRight, ArrowRight, Activity } from 'lucide-react';
-import { renderBadgeEstado, isFinalizedState, isAbusoSexual, renderBadgePericia, renderMultiplePericiasBadges, renderBadgePP, calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, extractAndFormatDateFromActuacion, isDateInFuture, isValidDateString, INICIO_OPTIONS, formatDisplayDate, parseAnyDate, isPPMaxDaysExceeded, calculate4MonthsIPPDate } from './CausasTable';
+import { renderBadgeEstado, isFinalizedState, isAbusoSexual, renderBadgePericia, renderMultiplePericiasBadges, renderBadgePP, calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, extractAndFormatDateFromActuacion, isDateInFuture, isValidDateString, INICIO_OPTIONS, formatDisplayDate, parseAnyDate, isPPMaxDaysExceeded, calculate4MonthsIPPDate, calculateIPPDateWithMonths, parseIPPProrrogas } from './CausasTable';
 import OrigenSelect from './OrigenSelect';
 
 const monthNames = [
@@ -32,6 +32,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
   const [fechaDetencionState, setFechaDetencionState] = useState(formatDisplayDate(causa.fecha_detencion) || '');
   const [indagatoriaState, setIndagatoriaState] = useState(causa.indagatoria === 'SI' || causa.indagatoria === 'SÍ' || !!causa.fecha_indagatoria ? 'SI' : 'NO');
   const [fechaIndagatoriaState, setFechaIndagatoriaState] = useState(formatDisplayDate(causa.fecha_indagatoria) || '');
+  const [ippProrrogasState, setIppProrrogasState] = useState(parseIPPProrrogas(causa.ipp_prorrogas));
   const rawPP1 = causa.vencimiento_pp1 || causa.vencimiento_pp || causa.estado_pp || '';
   const initialSpecialPP = checkPPStatusSpecial(rawPP1);
   const [vencPP1State, setVencPP1State] = useState(initialSpecialPP || formatDisplayDate(rawPP1) || '');
@@ -586,7 +587,8 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
     const formattedVencIPP = formatDisplayDate(finalVencIPP);
 
     const isIndagado = (indagatoriaState === 'SI' || indagatoriaState === 'SÍ') && !!fechaIndagatoriaState;
-    const calculatedIndagatoriaIPP = isIndagado ? calculate4MonthsIPPDate(fechaIndagatoriaState) : '';
+    const currentTotalIPPMonths = 4 + (ippProrrogasState || []).reduce((acc, curr) => acc + Number(curr), 0);
+    const calculatedIndagatoriaIPP = isIndagado ? calculateIPPDateWithMonths(fechaIndagatoriaState, currentTotalIPPMonths) : '';
 
     const activeP = (periciasState || []).find(p => !p.finalizada && p.estado !== 'agregada') || (periciasState || [])[0];
 
@@ -606,6 +608,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
       pp_prorrogada: isDetenido ? ppProrrogadaState : false,
       indagatoria: isIndagado ? 'SI' : 'NO',
       fecha_indagatoria: isIndagado ? formatDisplayDate(fechaIndagatoriaState) : '',
+      ipp_prorrogas: isIndagado ? ippProrrogasState : [],
       vencimiento_ipp: isIndagado ? calculatedIndagatoriaIPP : (flagranciaState === 'NO' ? '' : ((formattedVencIPP && !checkPPStatusSpecial(formattedVencIPP)) ? formattedVencIPP : '')),
       revisar_dias: newPlazoDias,
       revisado: todayStr,
@@ -1958,13 +1961,19 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
 
                       {/* Casillero Fecha de Indagatoria (Visible si Indagatoria = SI) */}
                       {(indagatoriaState === 'SI' || indagatoriaState === 'SÍ') && (() => {
-                        const calculatedVencIPP = calculate4MonthsIPPDate(fechaIndagatoriaState);
+                        const currentTotalIPPMonths = 4 + (ippProrrogasState || []).reduce((acc, curr) => acc + Number(curr), 0);
+                        const calculatedVencIPP = calculateIPPDateWithMonths(fechaIndagatoriaState, currentTotalIPPMonths);
+                        const remainingMonths = 10 - currentTotalIPPMonths;
+
                         return (
-                          <div className="rounded-xl p-3 border border-amber-500/30 bg-amber-500/10 space-y-2 mt-2">
+                          <div className="rounded-xl p-3.5 border border-amber-500/30 bg-amber-500/10 space-y-3 mt-2">
                             <div className="flex items-center justify-between">
                               <label className="block font-bold text-amber-400 text-xs">
                                 📅 Fecha de Indagatoria (DD/MM/AA)
                               </label>
+                              <span className="text-[10px] text-amber-300/80 font-medium">
+                                Máximo legal: 10 meses
+                              </span>
                             </div>
                             <input
                               type="text"
@@ -1973,12 +1982,72 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                               onChange={(e) => setFechaIndagatoriaState(formatDateMask(e.target.value))}
                               className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-amber-500/40 focus:border-amber-400 focus:outline-none font-mono"
                             />
+
                             {fechaIndagatoriaState && (
-                              <div className="flex flex-col gap-0.5 pt-1 text-xs">
-                                <span className="text-slate-300 text-[11px]">⚡ Vencimiento IPP (+4 meses):</span>
-                                <span className="font-mono font-bold text-amber-200 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40 self-start">
-                                  {calculatedVencIPP || 'ingresando fecha...'}
-                                </span>
+                              <div className="space-y-2.5 pt-2 border-t border-amber-500/20">
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-slate-300 font-semibold text-[11px]">⚡ Vencimiento IPP ({currentTotalIPPMonths}m totales):</span>
+                                    <span className="font-mono font-extrabold text-amber-200 bg-amber-500/25 px-2.5 py-0.5 rounded-lg border border-amber-500/50 shadow-sm text-xs">
+                                      {calculatedVencIPP || 'ingresando fecha...'}
+                                    </span>
+                                  </div>
+
+                                  {ippProrrogasState.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setIppProrrogasState([])}
+                                      className="text-[10px] text-slate-400 hover:text-rose-300 underline cursor-pointer"
+                                      title="Restablecer a 4 meses iniciales"
+                                    >
+                                      Restablecer
+                                    </button>
+                                  )}
+                                </div>
+
+                                {ippProrrogasState.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                    {ippProrrogasState.map((p, idx) => (
+                                      <span key={idx} className="inline-flex items-center gap-1 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold">
+                                        <span>{idx + 1}ª Prórroga: +{p} meses</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <div className="pt-1">
+                                  {remainingMonths > 0 ? (
+                                    <div className="space-y-1.5">
+                                      <span className="block text-[11px] font-bold text-amber-300/90">
+                                        Prorrogar plazo de IPP (Disponible: {remainingMonths}m):
+                                      </span>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        {remainingMonths >= 4 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setIppProrrogasState(prev => [...prev, 4])}
+                                            className="px-2.5 py-1 text-xs font-bold text-amber-200 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 rounded-lg transition shadow-sm cursor-pointer flex items-center gap-1"
+                                          >
+                                            ➕ Prorrogar +4 Meses (Total {currentTotalIPPMonths + 4}m)
+                                          </button>
+                                        )}
+                                        {remainingMonths >= 2 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setIppProrrogasState(prev => [...prev, 2])}
+                                            className="px-2.5 py-1 text-xs font-bold text-amber-200 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 rounded-lg transition shadow-sm cursor-pointer flex items-center gap-1"
+                                          >
+                                            ➕ Prorrogar +2 Meses (Total {currentTotalIPPMonths + 2}m)
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="rounded-lg bg-amber-500/20 p-2 border border-amber-500/40 text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
+                                      <span>🔒 Límite máximo legal alcanzado (10 meses totales desde la indagatoria).</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>

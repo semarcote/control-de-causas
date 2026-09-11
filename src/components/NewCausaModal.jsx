@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { X, Plus, Scale, FileText, Unlock, UserCheck, AlertTriangle } from 'lucide-react';
-import { calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, formatCaratulaMask, isDateInFuture, isValidDateString, INICIO_OPTIONS, isPPMaxDaysExceeded, calculate4MonthsIPPDate } from './CausasTable';
+import { calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, formatCaratulaMask, isDateInFuture, isValidDateString, INICIO_OPTIONS, isPPMaxDaysExceeded, calculate4MonthsIPPDate, calculateIPPDateWithMonths, parseIPPProrrogas } from './CausasTable';
 import OrigenSelect from './OrigenSelect';
 
 export default function NewCausaModal({ onClose, onCreate }) {
@@ -13,6 +13,7 @@ export default function NewCausaModal({ onClose, onCreate }) {
   const [ippYear, setIppYear] = useState(currentYear2Digits);
   const [ippSuffix, setIppSuffix] = useState('00');
   const [customInicio, setCustomInicio] = useState('');
+  const [ippProrrogas, setIppProrrogas] = useState([]);
 
   const [formData, setFormData] = useState({
     ipp: '',
@@ -91,7 +92,8 @@ export default function NewCausaModal({ onClose, onCreate }) {
 
     const isDet = formData.detenido === 'SI';
     const isInd = (formData.indagatoria === 'SI' || formData.indagatoria === 'SÍ') && !!formData.fecha_indagatoria;
-    const calculatedIPP = isInd ? calculate4MonthsIPPDate(formData.fecha_indagatoria) : (formData.vencimiento_ipp || '');
+    const currentTotalIPPMonths = 4 + (ippProrrogas || []).reduce((acc, curr) => acc + Number(curr), 0);
+    const calculatedIPP = isInd ? calculateIPPDateWithMonths(formData.fecha_indagatoria, currentTotalIPPMonths) : (formData.vencimiento_ipp || '');
 
     onCreate({
       ...formData,
@@ -102,6 +104,7 @@ export default function NewCausaModal({ onClose, onCreate }) {
       pp_prorrogada: isDet ? formData.pp_prorrogada : false,
       indagatoria: isInd ? 'SI' : 'NO',
       fecha_indagatoria: isInd ? formData.fecha_indagatoria : '',
+      ipp_prorrogas: isInd ? ippProrrogas : [],
       vencimiento_ipp: calculatedIPP,
       ipp: fullFormattedIPP,
       sumario: autoSumario ? 'SÍ' : formData.sumario,
@@ -312,15 +315,18 @@ export default function NewCausaModal({ onClose, onCreate }) {
 
             {/* Fecha de Indagatoria en Alta de Causa */}
             {(formData.indagatoria === 'SI' || formData.indagatoria === 'SÍ') && (() => {
-              const calculatedVencIPP = calculate4MonthsIPPDate(formData.fecha_indagatoria);
+              const currentTotalIPPMonths = 4 + (ippProrrogas || []).reduce((acc, curr) => acc + Number(curr), 0);
+              const calculatedVencIPP = calculateIPPDateWithMonths(formData.fecha_indagatoria, currentTotalIPPMonths);
+              const remainingMonths = 10 - currentTotalIPPMonths;
+
               return (
-                <div className="col-span-2 rounded-xl p-3.5 border border-amber-500/30 bg-amber-500/10 space-y-2">
+                <div className="col-span-2 rounded-xl p-3.5 border border-amber-500/30 bg-amber-500/10 space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="block font-bold text-amber-400 text-xs">
                       📅 Fecha de Indagatoria (DD/MM/AA)
                     </label>
                     <span className="text-[10px] text-amber-300/80 font-medium">
-                      Calcula Vencimiento IPP (+4 meses) automáticamente
+                      Máximo legal: 10 meses
                     </span>
                   </div>
                   <input
@@ -329,7 +335,7 @@ export default function NewCausaModal({ onClose, onCreate }) {
                     value={formData.fecha_indagatoria || ''}
                     onChange={(e) => {
                       const val = formatDateMask(e.target.value);
-                      const calculated = calculate4MonthsIPPDate(val);
+                      const calculated = calculateIPPDateWithMonths(val, currentTotalIPPMonths);
                       setFormData(prev => ({
                         ...prev,
                         fecha_indagatoria: val,
@@ -338,12 +344,88 @@ export default function NewCausaModal({ onClose, onCreate }) {
                     }}
                     className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-amber-500/40 focus:border-amber-400 focus:outline-none font-mono"
                   />
+
                   {formData.fecha_indagatoria && (
-                    <div className="flex items-center gap-2 pt-1 text-xs">
-                      <span className="text-slate-300">⚡ Vencimiento IPP (+4 meses corridos):</span>
-                      <span className="font-mono font-bold text-amber-200 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40 underline">
-                        {calculatedVencIPP || 'ingresando fecha...'}
-                      </span>
+                    <div className="space-y-2.5 pt-2 border-t border-amber-500/20">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-300 font-semibold text-[11px]">⚡ Vencimiento IPP ({currentTotalIPPMonths}m totales):</span>
+                          <span className="font-mono font-extrabold text-amber-200 bg-amber-500/25 px-2.5 py-0.5 rounded-lg border border-amber-500/50 shadow-sm text-xs">
+                            {calculatedVencIPP || 'ingresando fecha...'}
+                          </span>
+                        </div>
+
+                        {ippProrrogas.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIppProrrogas([]);
+                              const resetVenc = calculateIPPDateWithMonths(formData.fecha_indagatoria, 4);
+                              setFormData(prev => ({ ...prev, vencimiento_ipp: resetVenc }));
+                            }}
+                            className="text-[10px] text-slate-400 hover:text-rose-300 underline cursor-pointer"
+                            title="Restablecer a 4 meses iniciales"
+                          >
+                            Restablecer
+                          </button>
+                        )}
+                      </div>
+
+                      {ippProrrogas.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {ippProrrogas.map((p, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold">
+                              <span>{idx + 1}ª Prórroga: +{p} meses</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="pt-1">
+                        {remainingMonths > 0 ? (
+                          <div className="space-y-1.5">
+                            <span className="block text-[11px] font-bold text-amber-300/90">
+                              Prorrogar plazo de IPP (Disponible: {remainingMonths}m):
+                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {remainingMonths >= 4 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nextP = [...ippProrrogas, 4];
+                                    setIppProrrogas(nextP);
+                                    const nextTotal = 4 + nextP.reduce((a, b) => a + b, 0);
+                                    const nextVenc = calculateIPPDateWithMonths(formData.fecha_indagatoria, nextTotal);
+                                    setFormData(prev => ({ ...prev, vencimiento_ipp: nextVenc }));
+                                  }}
+                                  className="px-2.5 py-1 text-xs font-bold text-amber-200 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 rounded-lg transition shadow-sm cursor-pointer flex items-center gap-1"
+                                >
+                                  ➕ Prorrogar +4 Meses (Total {currentTotalIPPMonths + 4}m)
+                                </button>
+                              )}
+                              {remainingMonths >= 2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nextP = [...ippProrrogas, 2];
+                                    setIppProrrogas(nextP);
+                                    const nextTotal = 4 + nextP.reduce((a, b) => a + b, 0);
+                                    const nextVenc = calculateIPPDateWithMonths(formData.fecha_indagatoria, nextTotal);
+                                    setFormData(prev => ({ ...prev, vencimiento_ipp: nextVenc }));
+                                  }}
+                                  className="px-2.5 py-1 text-xs font-bold text-amber-200 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 rounded-lg transition shadow-sm cursor-pointer flex items-center gap-1"
+                                >
+                                  ➕ Prorrogar +2 Meses (Total {currentTotalIPPMonths + 2}m)
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-lg bg-amber-500/20 p-2 border border-amber-500/40 text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
+                            <span>🔒 Límite máximo legal alcanzado (10 meses totales desde la indagatoria).</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

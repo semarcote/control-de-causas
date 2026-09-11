@@ -189,7 +189,21 @@ export function formatDisplayDate(val) {
   return '';
 }
 
-export function calculate4MonthsIPPDate(dateInput) {
+export function parseIPPProrrogas(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(Number).filter(n => !isNaN(n) && n > 0);
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map(Number).filter(n => !isNaN(n) && n > 0);
+    } catch (e) {
+      return raw.split(',').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+    }
+  }
+  return [];
+}
+
+export function calculateIPPDateWithMonths(dateInput, totalMonths = 4) {
   if (!dateInput) return '';
   const str = String(dateInput).trim();
   if (!str || str === '-' || str === 'Sin fecha') return '';
@@ -201,8 +215,8 @@ export function calculate4MonthsIPPDate(dateInput) {
   const m = parsed.getMonth(); // 0-indexed
   const y = parsed.getFullYear();
 
-  // Target month is month + 4
-  const targetDate = new Date(y, m + 4, d);
+  // Target month is month + totalMonths
+  const targetDate = new Date(y, m + Number(totalMonths || 4), d);
 
   // If day overflowed into next month (e.g. Oct 31 -> Feb 28), clamp to last day of target month
   if (targetDate.getDate() !== d) {
@@ -214,6 +228,10 @@ export function calculate4MonthsIPPDate(dateInput) {
   const yearStr = String(targetDate.getFullYear()).slice(-2);
 
   return `${dayStr}/${monthStr}/${yearStr}`;
+}
+
+export function calculate4MonthsIPPDate(dateInput) {
+  return calculateIPPDateWithMonths(dateInput, 4);
 }
 
 export function getVencimientoIPP(causa) {
