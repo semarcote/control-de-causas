@@ -1972,85 +1972,112 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                         const remainingMonths = 10 - currentTotalIPPMonths;
 
                         return (
-                          <div className="rounded-xl p-3.5 border border-amber-500/30 bg-amber-500/10 space-y-3 mt-2">
+                          <div className="rounded-xl p-4 border border-amber-500/40 bg-amber-500/10 space-y-3 mt-2 shadow-inner">
                             <div className="flex items-center justify-between">
                               <label className="block font-bold text-amber-400 text-xs">
                                 📅 Fecha de Indagatoria (DD/MM/AA)
                               </label>
-                              <span className="text-[10px] text-amber-300/80 font-medium">
-                                Máximo legal: 10 meses
+                              <span className="text-[10px] text-amber-300 font-semibold bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                                Tope Máximo: 10 Meses Totales
                               </span>
                             </div>
+
                             <input
                               type="text"
-                              placeholder="Ej. 06/09/26"
+                              placeholder="Ej. 12/05/26"
                               value={fechaIndagatoriaState}
                               onChange={(e) => setFechaIndagatoriaState(formatDateMask(e.target.value))}
                               className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-amber-500/40 focus:border-amber-400 focus:outline-none font-mono"
                             />
 
                             {fechaIndagatoriaState && (
-                              <div className="space-y-2.5 pt-2 border-t border-amber-500/20">
-                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-slate-300 font-semibold text-[11px]">⚡ Vencimiento IPP ({currentTotalIPPMonths}m totales):</span>
-                                    <span className="font-mono font-extrabold text-amber-200 bg-amber-500/25 px-2.5 py-0.5 rounded-lg border border-amber-500/50 shadow-sm text-xs">
+                              <div className="space-y-3 pt-2.5 border-t border-amber-500/25">
+                                {/* Banner de Nuevo Vencimiento IPP Resultante */}
+                                <div className="rounded-xl bg-slate-950/90 p-3 border border-amber-500/40 space-y-2">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span className="text-slate-300 font-bold text-xs">⚡ Nuevo Vencimiento IPP:</span>
+                                    <span className="font-mono text-sm font-extrabold text-amber-200 bg-amber-500/30 px-3 py-1 rounded-lg border border-amber-500/60 shadow-[0_0_12px_rgba(245,158,11,0.25)]">
                                       {calculatedVencIPP || 'ingresando fecha...'}
                                     </span>
                                   </div>
 
-                                  {ippProrrogasState.length > 0 && (
+                                  {/* Resumen de Tiempo Prorrogado y Tiempo Restante */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-800 text-[11px]">
+                                    <div className="flex items-center justify-between bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                                      <span className="text-slate-400 font-medium">🕒 Tiempo Prorrogado:</span>
+                                      <span className="font-extrabold text-amber-300">
+                                        {ippProrrogasState.length > 0 ? `+${currentTotalIPPMonths - 4} meses` : 'Sin prórroga (0m)'}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                                      <span className="text-slate-400 font-medium">⏳ Restan Disponibles:</span>
+                                      <span className={`font-extrabold ${remainingMonths > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {remainingMonths} {remainingMonths === 1 ? 'mes' : 'meses'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-[10px] text-slate-400 text-center font-mono pt-0.5">
+                                    {currentTotalIPPMonths} meses acumulados desde fecha de indagatoria ({fechaIndagatoriaState})
+                                  </div>
+                                </div>
+
+                                {/* Historial de Prórrogas Aplicadas */}
+                                {ippProrrogasState.length > 0 && (
+                                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      {ippProrrogasState.map((p, idx) => (
+                                        <span key={idx} className="inline-flex items-center gap-1 text-[11px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-md font-bold">
+                                          <span>{idx + 1}ª Prórroga: +{p} meses</span>
+                                        </span>
+                                      ))}
+                                    </div>
+
                                     <button
                                       type="button"
                                       onClick={() => setIppProrrogasState([])}
-                                      className="text-[10px] text-slate-400 hover:text-rose-300 underline cursor-pointer"
+                                      className="text-[10px] text-rose-400 hover:text-rose-300 hover:underline cursor-pointer font-bold shrink-0"
                                       title="Restablecer a 4 meses iniciales"
                                     >
-                                      Restablecer
+                                      Restablecer (4m iniciales)
                                     </button>
-                                  )}
-                                </div>
-
-                                {ippProrrogasState.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                    {ippProrrogasState.map((p, idx) => (
-                                      <span key={idx} className="inline-flex items-center gap-1 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-semibold">
-                                        <span>{idx + 1}ª Prórroga: +{p} meses</span>
-                                      </span>
-                                    ))}
                                   </div>
                                 )}
 
+                                {/* Botones de Prórroga */}
                                 <div className="pt-1">
                                   {remainingMonths > 0 ? (
                                     <div className="space-y-1.5">
-                                      <span className="block text-[11px] font-bold text-amber-300/90">
-                                        Prorrogar plazo de IPP (Disponible: {remainingMonths}m):
+                                      <span className="block text-[11px] font-bold text-amber-300">
+                                        Seleccione plazo para prorrogar:
                                       </span>
-                                      <div className="flex flex-wrap items-center gap-2">
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                         {remainingMonths >= 4 && (
                                           <button
                                             type="button"
                                             onClick={() => setIppProrrogasState(prev => [...prev, 4])}
-                                            className="px-2.5 py-1 text-xs font-bold text-amber-200 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 rounded-lg transition shadow-sm cursor-pointer flex items-center gap-1"
+                                            className="px-3 py-2 text-xs font-bold text-amber-100 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/60 rounded-xl transition shadow-md hover:scale-[1.02] cursor-pointer flex items-center justify-center gap-1.5"
                                           >
-                                            ➕ Prorrogar +4 Meses (Total {currentTotalIPPMonths + 4}m)
+                                            <span>➕ Prorrogar +4 Meses</span>
+                                            <span className="text-[10px] text-amber-300/80 font-mono">(Total {currentTotalIPPMonths + 4}m)</span>
                                           </button>
                                         )}
                                         {remainingMonths >= 2 && (
                                           <button
                                             type="button"
                                             onClick={() => setIppProrrogasState(prev => [...prev, 2])}
-                                            className="px-2.5 py-1 text-xs font-bold text-amber-200 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 rounded-lg transition shadow-sm cursor-pointer flex items-center gap-1"
+                                            className="px-3 py-2 text-xs font-bold text-amber-100 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/60 rounded-xl transition shadow-md hover:scale-[1.02] cursor-pointer flex items-center justify-center gap-1.5"
                                           >
-                                            ➕ Prorrogar +2 Meses (Total {currentTotalIPPMonths + 2}m)
+                                            <span>➕ Prorrogar +2 Meses</span>
+                                            <span className="text-[10px] text-amber-300/80 font-mono">(Total {currentTotalIPPMonths + 2}m)</span>
                                           </button>
                                         )}
                                       </div>
                                     </div>
                                   ) : (
-                                    <div className="rounded-lg bg-amber-500/20 p-2 border border-amber-500/40 text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
-                                      <span>🔒 Límite máximo legal alcanzado (10 meses totales desde la indagatoria).</span>
+                                    <div className="rounded-xl bg-amber-500/20 p-2.5 border border-amber-500/50 text-xs font-bold text-amber-300 flex items-center justify-center gap-2 text-center">
+                                      <span>🔒 Límite máximo legal alcanzado (10 meses totales desde la fecha de indagatoria).</span>
                                     </div>
                                   )}
                                 </div>
