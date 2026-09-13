@@ -189,17 +189,53 @@ export function formatDisplayDate(val) {
   return '';
 }
 
-export function parseIPPProrrogas(raw) {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw.map(Number).filter(n => !isNaN(n) && n > 0);
-  if (typeof raw === 'string' && raw.trim()) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.map(Number).filter(n => !isNaN(n) && n > 0);
-    } catch (e) {
-      return raw.split(',').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+export function parseIPPProrrogas(raw, fechaIndagatoria = '', vencimientoIPP = '') {
+  let result = [];
+  if (raw) {
+    if (Array.isArray(raw)) {
+      result = raw.map(Number).filter(n => !isNaN(n) && n > 0);
+    } else if (typeof raw === 'string' && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          result = parsed.map(Number).filter(n => !isNaN(n) && n > 0);
+        }
+      } catch (e) {
+        result = raw.split(',').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+      }
     }
   }
+
+  if (result.length > 0) return result;
+
+  // Infer prórrogas from existing fechaIndagatoria and vencimientoIPP if raw is empty
+  if (fechaIndagatoria && vencimientoIPP) {
+    const vencFormatted = formatDisplayDate(vencimientoIPP);
+    if (vencFormatted && !checkPPStatusSpecial(vencFormatted)) {
+      // Test exact matches for 10, 8, 6 months
+      for (const m of [10, 8, 6]) {
+        if (calculateIPPDateWithMonths(fechaIndagatoria, m) === vencFormatted) {
+          if (m === 10) return [4, 2];
+          if (m === 8) return [4];
+          if (m === 6) return [2];
+        }
+      }
+
+      // If no exact string match (due to slight day variations), calculate month difference
+      const dtInd = parseAnyDate(fechaIndagatoria);
+      const dtVenc = parseAnyDate(vencimientoIPP);
+      if (dtInd && dtVenc) {
+        let diffMonths = (dtVenc.getFullYear() - dtInd.getFullYear()) * 12 + (dtVenc.getMonth() - dtInd.getMonth());
+        if (dtVenc.getDate() < dtInd.getDate() - 5) {
+          diffMonths -= 1;
+        }
+        if (diffMonths >= 9) return [4, 2];
+        if (diffMonths >= 7) return [4];
+        if (diffMonths >= 5) return [2];
+      }
+    }
+  }
+
   return [];
 }
 

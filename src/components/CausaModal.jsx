@@ -32,7 +32,9 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
   const [fechaDetencionState, setFechaDetencionState] = useState(formatDisplayDate(causa.fecha_detencion) || '');
   const [indagatoriaState, setIndagatoriaState] = useState(causa.indagatoria === 'SI' || causa.indagatoria === 'SÍ' || !!causa.fecha_indagatoria ? 'SI' : 'NO');
   const [fechaIndagatoriaState, setFechaIndagatoriaState] = useState(formatDisplayDate(causa.fecha_indagatoria) || '');
-  const [ippProrrogasState, setIppProrrogasState] = useState(parseIPPProrrogas(causa.ipp_prorrogas));
+  const [ippProrrogasState, setIppProrrogasState] = useState(
+    parseIPPProrrogas(causa.ipp_prorrogas, causa.fecha_indagatoria, causa.vencimiento_ipp)
+  );
   const rawPP1 = causa.vencimiento_pp1 || causa.vencimiento_pp || causa.estado_pp || '';
   const initialSpecialPP = checkPPStatusSpecial(rawPP1);
   const [vencPP1State, setVencPP1State] = useState(initialSpecialPP || formatDisplayDate(rawPP1) || '');
