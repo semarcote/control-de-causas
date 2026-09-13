@@ -285,26 +285,19 @@ export default function NewCausaModal({ onClose, onCreate }) {
               <label className="block font-semibold text-slate-300 mb-1">¿Trámite Flagrancia?</label>
               <select
                 value={formData.flagrancia || 'NO'}
-                onChange={(e) => setFormData(prev => ({ ...prev, flagrancia: e.target.value }))}
-                className="w-full rounded-xl bg-slate-950 p-2.5 text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="NO">NO</option>
-                <option value="SI">SÍ</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-slate-300 mb-1">¿Tiene Imputado con Indagatoria?</label>
-              <select
-                value={formData.indagatoria || 'NO'}
                 onChange={(e) => {
                   const val = e.target.value;
-                  setFormData(prev => ({
-                    ...prev,
-                    indagatoria: val,
-                    fecha_indagatoria: val === 'NO' ? '' : prev.fecha_indagatoria,
-                    vencimiento_ipp: val === 'NO' ? '' : prev.vencimiento_ipp
-                  }));
+                  if (val === 'SI' || val === 'SÍ') {
+                    setIppProrrogas([]);
+                    setFormData(prev => ({
+                      ...prev,
+                      flagrancia: val,
+                      indagatoria: 'NO',
+                      fecha_indagatoria: ''
+                    }));
+                  } else {
+                    setFormData(prev => ({ ...prev, flagrancia: val }));
+                  }
                 }}
                 className="w-full rounded-xl bg-slate-950 p-2.5 text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
               >
@@ -313,8 +306,32 @@ export default function NewCausaModal({ onClose, onCreate }) {
               </select>
             </div>
 
-            {/* Fecha de Indagatoria en Alta de Causa */}
-            {(formData.indagatoria === 'SI' || formData.indagatoria === 'SÍ') && (() => {
+            {/* ¿Tiene Imputado con Indagatoria? (Visible ÚNICAMENTE si Flagrancia = NO) */}
+            {(formData.flagrancia !== 'SI' && formData.flagrancia !== 'SÍ') && (
+              <div>
+                <label className="block font-semibold text-slate-300 mb-1">¿Tiene Imputado con Indagatoria?</label>
+                <select
+                  value={formData.indagatoria || 'NO'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData(prev => ({
+                      ...prev,
+                      indagatoria: val,
+                      fecha_indagatoria: val === 'NO' ? '' : prev.fecha_indagatoria,
+                      vencimiento_ipp: val === 'NO' ? '' : prev.vencimiento_ipp
+                    }));
+                    if (val === 'NO') setIppProrrogas([]);
+                  }}
+                  className="w-full rounded-xl bg-slate-950 p-2.5 text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="NO">NO</option>
+                  <option value="SI">SÍ</option>
+                </select>
+              </div>
+            )}
+
+            {/* Fecha de Indagatoria en Alta de Causa (Visible ÚNICAMENTE si Flagrancia = NO e Indagatoria = SI) */}
+            {(formData.flagrancia !== 'SI' && formData.flagrancia !== 'SÍ') && (formData.indagatoria === 'SI' || formData.indagatoria === 'SÍ') && (() => {
               const currentTotalIPPMonths = 4 + (ippProrrogas || []).reduce((acc, curr) => acc + Number(curr), 0);
               const calculatedVencIPP = calculateIPPDateWithMonths(formData.fecha_indagatoria, currentTotalIPPMonths);
               const remainingMonths = 10 - currentTotalIPPMonths;

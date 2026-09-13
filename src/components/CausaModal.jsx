@@ -1680,7 +1680,11 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                       onChange={(e) => {
                         const val = e.target.value;
                         setFlagranciaState(val);
-                        if (val === 'NO') {
+                        if (val === 'SI' || val === 'SÍ') {
+                          setIndagatoriaState('NO');
+                          setFechaIndagatoriaState('');
+                          setIppProrrogasState([]);
+                        } else {
                           setFechaFlagranciaState('');
                           setFlagranciaProrrogadaState(false);
                           setVencIPPState('');
@@ -1940,27 +1944,29 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
 
                   {/* Controles Estándar (Vencimiento IPP y Denuncia) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-semibold text-slate-300 mb-1">
-                        ¿Tiene Imputado con Indagatoria?
-                      </label>
-                      <select
-                        value={indagatoriaState}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setIndagatoriaState(val);
-                          if (val === 'NO') {
-                            setFechaIndagatoriaState('');
-                          }
-                        }}
-                        className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
-                      >
-                        <option value="NO">NO</option>
-                        <option value="SI">SÍ</option>
-                      </select>
+                    {(flagranciaState !== 'SI' && flagranciaState !== 'SÍ') && (
+                      <div>
+                        <label className="block font-semibold text-slate-300 mb-1">
+                          ¿Tiene Imputado con Indagatoria?
+                        </label>
+                        <select
+                          value={indagatoriaState}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setIndagatoriaState(val);
+                            if (val === 'NO') {
+                              setFechaIndagatoriaState('');
+                              setIppProrrogasState([]);
+                            }
+                          }}
+                          className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-slate-800 focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="NO">NO</option>
+                          <option value="SI">SÍ</option>
+                        </select>
 
-                      {/* Casillero Fecha de Indagatoria (Visible si Indagatoria = SI) */}
-                      {(indagatoriaState === 'SI' || indagatoriaState === 'SÍ') && (() => {
+                        {/* Casillero Fecha de Indagatoria (Visible si Indagatoria = SI) */}
+                        {(indagatoriaState === 'SI' || indagatoriaState === 'SÍ') && (() => {
                         const currentTotalIPPMonths = 4 + (ippProrrogasState || []).reduce((acc, curr) => acc + Number(curr), 0);
                         const calculatedVencIPP = calculateIPPDateWithMonths(fechaIndagatoriaState, currentTotalIPPMonths);
                         const remainingMonths = 10 - currentTotalIPPMonths;
@@ -2053,7 +2059,8 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                           </div>
                         );
                       })()}
-                    </div>
+                      </div>
+                    )}
 
                     <div>
                       <label className="block font-semibold text-slate-300 mb-1">
