@@ -175,10 +175,16 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
     });
   };
 
-  // Parse timeline items from `tramite` string using /// as delimiter
+  // Parse timeline items from `tramite` string using /// as delimiter (filter out legacy auto-generated status entries)
   const currentTramite = formData.tramite !== undefined ? formData.tramite : (causa.tramite || '');
   const rawTimeline = currentTramite
-    ? currentTramite.split('///').map(item => item.trim()).filter(Boolean)
+    ? currentTramite.split('///').map(item => item.trim()).filter(item => {
+        if (!item) return false;
+        const lower = item.toLowerCase();
+        if (lower.includes('actualización de expediente') || lower.includes('actualizacion de expediente')) return false;
+        if (lower.includes('modificación de expediente') || lower.includes('modificacion de expediente')) return false;
+        return true;
+      })
     : [];
 
   const handleInputChange = (field, value) => {
@@ -549,26 +555,11 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
       }
     }
 
-    const changes = [];
-    if (nuevoEstado !== causa.estado) changes.push(`Estado: ${nuevoEstado}`);
-    if (detenidoState !== (causa.detenido || 'NO')) changes.push(`Detenido: ${detenidoState}`);
-    if (flagranciaState !== (causa.flagrancia || 'NO')) changes.push(`Flagrancia: ${flagranciaState}`);
-    if (vencPP1State !== (causa.vencimiento_pp1 || causa.vencimiento_pp || '')) {
-      changes.push(`Situación PP: ${vencPP1State || 'Sin fecha'}`);
+    let updatedTramite = causa.tramite !== undefined ? causa.tramite : (formData.tramite || '');
+    if (changeEstadoNote && changeEstadoNote.trim()) {
+      const noteEntry = `${todayStr} - ${changeEstadoNote.trim()}`;
+      updatedTramite = updatedTramite ? `${updatedTramite} /// ${noteEntry}` : noteEntry;
     }
-    if (!specialStatus && ppProrrogadaState !== (causa.pp_prorrogada === true || causa.pp_prorrogada === 'SI')) {
-      changes.push(ppProrrogadaState ? `Prorrogada PP: SÍ (2º Plazo: ${calculatedPP2})` : `Prorrogada PP: NO (1º Plazo)`);
-    }
-    if (vencIPPState !== (causa.vencimiento_ipp || '')) changes.push(`Venc. IPP: ${vencIPPState || 'Sin fecha'}`);
-    if (changeEstadoNote.trim()) changes.push(`Obs: ${changeEstadoNote.trim()}`);
-
-    const entryText = changes.length > 0
-      ? `${todayStr} Modificación de expediente (${changes.join(' | ')})`
-      : `${todayStr} Actualización de expediente`;
-
-    const updatedTramite = causa.tramite
-      ? `${causa.tramite} /// ${entryText}`
-      : entryText;
 
     const normInicio = (formData.denunciado_en || '').trim().toLowerCase();
     const autoSumario = normInicio === 'mesa' || normInicio === 'mail' || normInicio === 'ciudadana';
