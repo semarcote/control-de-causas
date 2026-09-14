@@ -293,82 +293,68 @@ export function executeGeminiTool(toolCall, causas) {
   return { error: 'Acción no reconocida' };
 }
 
-async function getAvailableModels(key) {
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (!data.models || !Array.isArray(data.models)) return [];
+// Cache the last working model for fast subsequent calls
+let cachedWorkingModel = null;
 
-    const validModels = data.models
-      .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
-      .map(m => m.name.replace(/^models\//, ''));
-
-    validModels.sort((a, b) => {
-      const score = (name) => {
-        if (name.includes('2.0-flash')) return 1;
-        if (name.includes('1.5-flash')) return 2;
-        if (name.includes('flash')) return 3;
-        if (name.includes('1.5-pro')) return 4;
-        if (name.includes('pro')) return 5;
-        return 6;
-      };
-      return score(a) - score(b);
-    });
-
-    return validModels;
-  } catch (e) {
-    return [];
-  }
-}
-
-const FALLBACK_MODELS = [
+const TARGET_MODELS = [
   'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-2.0-flash-lite',
-  'gemini-2.0-flash-exp',
-  'gemini-1.5-pro',
-  'gemini-1.5-pro-latest',
-  'gemini-pro'
+  'gemini-1.5-pro'
 ];
 
 async function fetchGeminiAPI(key, requestBody) {
-  let discovered = await getAvailableModels(key);
-  const modelsToTry = discovered.length > 0 ? Array.from(new Set([...discovered, ...FALLBACK_MODELS])) : FALLBACK_MODELS;
+  const modelsToTry = cachedWorkingModel
+    ? [cachedWorkingModel, ...TARGET_MODELS.filter(m => m !== cachedWorkingModel)]
+    : TARGET_MODELS;
 
-  let lastErrText = '';
+  let lastErrorMsg = '';
 
   for (const model of modelsToTry) {
-    const versions = ['v1beta', 'v1'];
-    for (const ver of versions) {
-      const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody)
-        });
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
 
-        if (response.ok) {
-          const data = await response.json();
-          return { ok: true, data, model, ver };
-        }
-
-        const errText = await response.text();
-        console.warn(`Gemini model ${ver}/${model} status ${response.status}:`, errText);
-        lastErrText = errText;
-
-        if (response.status === 400 && (errText.includes('API_KEY_INVALID') || errText.includes('API key not valid'))) {
-          throw new Error('API_KEY_INVALID');
-        }
-      } catch (e) {
-        if (e.message === 'API_KEY_INVALID') throw e;
-        lastErrText = e.message;
+      if (response.ok) {
+        const data = await response.json();
+        cachedWorkingModel = model;
+        return { ok: true, data, model };
       }
+
+      const errText = await response.text();
+      let parsedErr = errText;
+      try {
+        const errJson = JSON.parse(errText);
+        parsedErr = errJson.error?.message || errText;
+      } catch (e) {
+        parsedErr = errText;
+      }
+
+      console.warn(`Gemini model ${model} status ${response.status}:`, parsedErr);
+      lastErrorMsg = parsedErr;
+
+      // Handle invalid API key explicitly
+      if (response.status === 400 && (parsedErr.includes('API_KEY_INVALID') || parsedErr.includes('API key not valid'))) {
+        throw new Error('API_KEY_INVALID');
+      }
+      if (response.status === 403 && (parsedErr.includes('PERMISSION_DENIED') || parsedErr.includes('API_KEY_INVALID'))) {
+        throw new Error('API_KEY_INVALID');
+      }
+
+      // Handle Rate Limit / Quota Exceeded
+      if (response.status === 429) {
+        throw new Error('Se ha alcanzado el límite de consultas por minuto en la API Key de Gemini. Aguarde unos segundos e intente nuevamente.');
+      }
+    } catch (e) {
+      if (e.message === 'API_KEY_INVALID' || e.message.includes('límite de consultas')) throw e;
+      lastErrorMsg = e.message;
     }
   }
 
+  // Retry without tools if schema/tool call validation failed
   if (requestBody.tools) {
     const simplifiedBody = { ...requestBody };
     delete simplifiedBody.tools;
@@ -377,13 +363,45 @@ async function fetchGeminiAPI(key, requestBody) {
     } catch (e) {}
   }
 
-  throw new Error(`No se pudo conectar con Gemini. Verifique su API Key. (${lastErrText || 'Modelos no disponibles'})`);
+  throw new Error(`No se pudo conectar con la API de Gemini. ${lastErrorMsg || 'Verifique la clave de API ingresada o su conexión.'}`);
+}
+
+// Sanitizes conversation history turns to ensure strict user <-> model turn order
+function sanitizeContents(rawContents) {
+  const clean = [];
+  for (const item of rawContents) {
+    if (!item || !item.parts || !item.parts.length) continue;
+    const textPart = item.parts.find(p => (p.text && p.text.trim()) || p.functionCall || p.functionResponse);
+    if (!textPart) continue;
+
+    const role = item.role === 'assistant' ? 'model' : item.role;
+    if (role !== 'user' && role !== 'model') continue;
+
+    if (clean.length > 0 && clean[clean.length - 1].role === role) {
+      // Combine consecutive same-role turns
+      if (textPart.text) {
+        clean[clean.length - 1].parts[0].text += `\n${textPart.text}`;
+      }
+    } else {
+      clean.push({
+        role,
+        parts: item.parts
+      });
+    }
+  }
+
+  // Ensure conversation starts with 'user'
+  while (clean.length > 0 && clean[0].role !== 'user') {
+    clean.shift();
+  }
+
+  return clean;
 }
 
 // Main execution API for Gemini Assistant
 export async function sendPromptToGemini(userPrompt, conversationHistory = [], causas = [], apiKey = '', currentUser = null) {
   const key = apiKey || getStoredGeminiApiKey(currentUser);
-  if (!key) {
+  if (!key || !key.trim()) {
     throw new Error('API_KEY_MISSING');
   }
 
@@ -401,13 +419,15 @@ Si el usuario solicita realizar cambios en una causa (registrar audiencias, modi
     ]
   };
 
-  const contents = [
+  const rawContents = [
     ...conversationHistory,
     {
       role: 'user',
       parts: [{ text: userPrompt }]
     }
   ];
+
+  const contents = sanitizeContents(rawContents);
 
   const requestBody = {
     systemInstruction,
@@ -419,7 +439,7 @@ Si el usuario solicita realizar cambios en una causa (registrar audiencias, modi
     ]
   };
 
-  const { data } = await fetchGeminiAPI(key, requestBody);
+  const { data } = await fetchGeminiAPI(key.trim(), requestBody);
   const candidate = data.candidates?.[0];
   if (!candidate) {
     throw new Error('No se recibió respuesta válida de Gemini.');
@@ -449,7 +469,7 @@ Si el usuario solicita realizar cambios en una causa (registrar audiencias, modi
         parts: [{ functionCall: fnCall }]
       },
       {
-        role: 'function',
+        role: 'user',
         parts: [
           {
             functionResponse: {
@@ -462,7 +482,7 @@ Si el usuario solicita realizar cambios en una causa (registrar audiencias, modi
     ];
 
     try {
-      const secondRes = await fetchGeminiAPI(key, {
+      const secondRes = await fetchGeminiAPI(key.trim(), {
         systemInstruction,
         contents: secondTurnContents
       });
@@ -470,7 +490,7 @@ Si el usuario solicita realizar cambios en una causa (registrar audiencias, modi
       const secondPart = secondRes.data.candidates?.[0]?.content?.parts?.[0];
       return {
         type: 'text',
-        text: secondPart?.text || 'Búsqueda completada exitosamente.',
+        text: secondPart?.text || 'Búsqueda procesal completada.',
         toolResult
       };
     } catch (e) {

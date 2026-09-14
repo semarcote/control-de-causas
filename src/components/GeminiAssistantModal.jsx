@@ -97,11 +97,12 @@ export default function GeminiAssistantModal({ isOpen, onClose, causas = [], cur
     try {
       // Build conversation history format for API
       const history = messages
-        .filter(m => m.id !== 'welcome')
+        .filter(m => m.id !== 'welcome' && !m.id.startsWith('err-'))
         .map(m => ({
           role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.text }]
-        }));
+          parts: [{ text: m.text || '' }]
+        }))
+        .filter(m => m.parts[0].text && m.parts[0].text.trim().length > 0);
 
       const res = await sendPromptToGemini(textToSend.trim(), history, causas, apiKey, currentUser);
 
