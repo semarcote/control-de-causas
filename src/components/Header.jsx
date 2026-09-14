@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Scale, Plus, Download, RefreshCw, Clock, ShieldAlert, Users, LogOut, Calendar, Files, AlertTriangle, FileSpreadsheet, Sparkles, Mail } from 'lucide-react';
+import { Scale, Plus, Download, RefreshCw, Clock, ShieldAlert, Users, LogOut, Calendar, Files, AlertTriangle, FileSpreadsheet, Mail } from 'lucide-react';
 
 export default function Header({
   totalCausas,
@@ -11,7 +11,6 @@ export default function Header({
   onPageChange,
   onNewCausa,
   onOpenEmailModal,
-  onOpenGemini,
   onExportData,
   onResetData,
   onLogout
@@ -152,20 +151,7 @@ export default function Header({
           )}
         </button>
 
-        {/* Gemini AI Assistant Button */}
-        {onOpenGemini && (
-          <button
-            onClick={onOpenGemini}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all bg-gradient-to-r from-purple-900/50 to-indigo-900/50 text-purple-200 hover:text-white hover:from-purple-800/80 hover:to-indigo-800/80 border border-purple-500/40 shadow-lg shadow-purple-900/20"
-            title="Abrir Asistente Inteligente Gemini IA"
-          >
-            <Sparkles className="h-4 w-4 text-purple-400 animate-pulse" />
-            <span>Asistente Gemini</span>
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-500/30 text-purple-300 border border-purple-400/30">
-              IA
-            </span>
-          </button>
-        )}
+
 
         {(currentUser?.role === 'Administrador General' || currentUser?.name?.toLowerCase().includes('marcote')) && (
           <button

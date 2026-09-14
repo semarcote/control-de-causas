@@ -9,7 +9,6 @@ import LoginScreen from './components/LoginScreen';
 import UserManagementModal from './components/UserManagementModal';
 import ExpirationPanel, { getDaysRemaining, getExpirationEvents } from './components/ExpirationPanel';
 import AudienciasPanel from './components/AudienciasPanel';
-import GeminiAssistantModal from './components/GeminiAssistantModal';
 import EmailAlertModal from './components/EmailAlertModal';
 import {
   getStoredSheetsUrl,
@@ -516,7 +515,6 @@ export default function App() {
   };
 
   const [activePage, setActivePage] = useState('causas'); // 'causas' | 'vencimientos' | 'usuarios'
-  const [isGeminiOpen, setIsGeminiOpen] = useState(false);
 
   // Count urgent expirations (<= 15 days) using exact expiration events logic
   const urgentVencimientosCount = useMemo(() => {
@@ -561,7 +559,6 @@ export default function App() {
         onPageChange={setActivePage}
         onNewCausa={() => setIsCreating(true)}
         onOpenEmailModal={() => setIsEmailModalOpen(true)}
-        onOpenGemini={() => setIsGeminiOpen(true)}
         onExportData={handleExportData}
         onResetData={handleResetData}
         onLogout={handleLogout}
@@ -684,18 +681,7 @@ export default function App() {
         />
       )}
 
-      {/* Gemini AI Assistant Modal */}
-      <GeminiAssistantModal
-        isOpen={isGeminiOpen}
-        onClose={() => setIsGeminiOpen(false)}
-        causas={causas}
-        currentUser={currentUser}
-        onSaveCausa={handleSaveCausa}
-        onSelectCausa={(causa) => {
-          setSelectedCausa(causa);
-          setIsGeminiOpen(false);
-        }}
-      />
+
 
       {/* Email Alerts Modal */}
       <EmailAlertModal
