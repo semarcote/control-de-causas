@@ -82,7 +82,17 @@ function mergeCausas(localList = [], remoteList = []) {
         const localTramiteLen = (l.tramite || '').length;
         const remoteTramiteLen = (existing.tramite || '').length;
         const mergedTramite = localTramiteLen >= remoteTramiteLen ? l.tramite : existing.tramite;
-        
+
+        // Combine pericias from remote and local without losing entries
+        const combinedPericias = new Map();
+        (existing.pericias || []).forEach(p => p && combinedPericias.set(p.id || `${p.tipo}-${p.fecha}`, p));
+        (l.pericias || []).forEach(p => p && combinedPericias.set(p.id || `${p.tipo}-${p.fecha}`, p));
+
+        // Combine audiencias from remote and local without losing entries
+        const combinedAudiencias = new Map();
+        (existing.audiencias || []).forEach(a => a && combinedAudiencias.set(a.id || `${a.tipo}-${a.fecha}-${a.hora}`, a));
+        (l.audiencias || []).forEach(a => a && combinedAudiencias.set(a.id || `${a.tipo}-${a.fecha}-${a.hora}`, a));
+
         map.set(key, {
           ...existing,
           ...l,
@@ -94,8 +104,12 @@ function mergeCausas(localList = [], remoteList = []) {
           indagatoria: l.indagatoria || existing.indagatoria,
           fecha_indagatoria: l.fecha_indagatoria || existing.fecha_indagatoria,
           fecha_detencion: l.fecha_detencion || existing.fecha_detencion,
-          audiencias: Array.isArray(l.audiencias) && l.audiencias.length > 0 ? l.audiencias : existing.audiencias,
-          pericias: Array.isArray(l.pericias) && l.pericias.length > 0 ? l.pericias : existing.pericias
+          ipp_prorrogas: Array.isArray(l.ipp_prorrogas) && l.ipp_prorrogas.length > 0 ? l.ipp_prorrogas : (existing ? existing.ipp_prorrogas : []),
+          flagrancia: l.flagrancia || existing.flagrancia,
+          fecha_flagrancia: l.fecha_flagrancia || existing.fecha_flagrancia,
+          flagrancia_prorrogada: l.flagrancia_prorrogada !== undefined ? l.flagrancia_prorrogada : existing.flagrancia_prorrogada,
+          audiencias: Array.from(combinedAudiencias.values()),
+          pericias: Array.from(combinedPericias.values())
         });
       }
     }
@@ -292,9 +306,10 @@ export default function App() {
       fetchCausasFromSheets(url, targetUserName)
         .then((remoteCausas) => {
           if (Array.isArray(remoteCausas)) {
-            setCausas(remoteCausas);
+            const merged = mergeRemoteAndLocalCausas(remoteCausas, initialLocal);
+            setCausas(merged);
             setLoadedUserKey(currentKey);
-            localStorage.setItem(currentKey, JSON.stringify(remoteCausas));
+            localStorage.setItem(currentKey, JSON.stringify(merged));
           }
         })
         .catch((err) => {

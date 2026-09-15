@@ -23,7 +23,7 @@ const HEADERS = [
   'id', 'ipp', 'estado', 'revision', 'revisado', 'revisar_dias', 'caratula', 
   'sumario', 'denunciado_en', 'fecha_inicio', 'tramite', 'detenido', 'fecha_detencion',
   'vencimiento_pp1', 'vencimiento_pp2', 'vencimiento_ipp', 'pp_prorrogada', 'pericias', 'audiencias',
-  'indagatoria', 'fecha_indagatoria'
+  'indagatoria', 'fecha_indagatoria', 'ipp_prorrogas', 'flagrancia', 'fecha_flagrancia', 'flagrancia_prorrogada'
 ];
 
 function deleteUnusedDefaultSheets(ss) {
@@ -55,8 +55,10 @@ function cleanAndMigrateSheetHeaders(sheet) {
     const hasFechaInicioCol = hRow.includes('fecha_inicio') || hRow.includes('fecha inicio');
     const hasFechaIndagatoriaCol = hRow.includes('fecha_indagatoria') || hRow.includes('fecha indagatoria');
     const hasFechaDetencionCol = hRow.includes('fecha_detencion') || hRow.includes('fecha detencion');
+    const hasIppProrrogasCol = hRow.includes('ipp_prorrogas') || hRow.includes('ipp prorrogas');
+    const hasFlagranciaCol = hRow.includes('flagrancia');
     const currentMaxCols = sheet.getMaxColumns();
-    const needsMigration = !hasFechaInicioCol || !hasFechaIndagatoriaCol || !hasFechaDetencionCol || hRow.length !== HEADERS.length || currentMaxCols !== HEADERS.length;
+    const needsMigration = !hasFechaInicioCol || !hasFechaIndagatoriaCol || !hasFechaDetencionCol || !hasIppProrrogasCol || !hasFlagranciaCol || hRow.length !== HEADERS.length || currentMaxCols !== HEADERS.length;
 
     if (needsMigration && data.length > 1) {
       const oldMap = {};
@@ -94,6 +96,10 @@ function cleanAndMigrateSheetHeaders(sheet) {
         const auds = getOld('audiencias') ?? '[]';
         const indVal = getOld('indagatoria') ?? '';
         const fIndVal = getOld('fecha_indagatoria') ?? getOld('fecha indagatoria') ?? '';
+        const ippProrrogasVal = getOld('ipp_prorrogas') ?? getOld('ipp prorrogas') ?? '[]';
+        const flagranciaVal = getOld('flagrancia') ?? 'NO';
+        const fFlagranciaVal = getOld('fecha_flagrancia') ?? getOld('fecha flagrancia') ?? '';
+        const flagranciaProrrVal = getOld('flagrancia_prorrogada') ?? getOld('flagrancia prorrogada') ?? '';
 
         newRows.push([
           getOld('id') ?? String(row[0] || ''),
@@ -116,7 +122,11 @@ function cleanAndMigrateSheetHeaders(sheet) {
           pericias,
           auds,
           indVal,
-          fIndVal
+          fIndVal,
+          ippProrrogasVal,
+          flagranciaVal,
+          fFlagranciaVal,
+          String(flagranciaProrrVal).toLowerCase() === 'true' || String(flagranciaProrrVal).toUpperCase() === 'SI' ? 'true' : 'false'
         ]);
       }
 
@@ -411,51 +421,73 @@ function rowToCausa(row, headersMap) {
     return null;
   };
 
-  let estadoVal = getVal('estado') ?? String(row[2] || 'En Trámite');
-  let revisionVal = getVal('revision') ?? (row.length >= 17 ? String(row[3] || '') : '');
+  const getCol = (name, defaultIdx) => {
+    const val = getVal(name);
+    if (val !== null) return val;
+    if (defaultIdx < row.length) {
+      const v = row[defaultIdx];
+      return (v !== undefined && v !== null && String(v).trim() !== '') ? String(v).trim() : '';
+    }
+    return '';
+  };
+
+  let estadoVal = getCol('estado', 2) || 'En Trámite';
+  let revisionVal = getCol('revision', 3);
 
   if (estadoVal.toLowerCase() === 'esperar' || estadoVal.toLowerCase() === 'revisar') {
     if (!revisionVal) revisionVal = estadoVal;
     estadoVal = 'En Trámite';
   }
 
-  const revisado = getVal('revisado') ?? (row.length >= 17 ? String(row[4] || '') : String(row[3] || ''));
-  const revisarDias = getVal('revisar_dias') ?? getVal('revisar dias') ?? (row.length >= 17 ? String(row[5] || '') : String(row[4] || ''));
-  const caratula = getVal('caratula') ?? (row.length >= 17 ? String(row[6] || '') : String(row[5] || ''));
-  const sumario = getVal('sumario') ?? (row.length >= 17 ? String(row[7] || '') : String(row[6] || ''));
-  const denunciadoEn = getVal('denunciado_en') ?? getVal('denunciado en') ?? (row.length >= 17 ? String(row[8] || '') : String(row[7] || ''));
-  const fechaInicio = getVal('fecha_inicio') ?? getVal('fecha inicio') ?? getVal('fecha_creacion') ?? (row.length === 18 ? String(row[9] || '') : '');
-  const tramite = getVal('tramite') ?? (row.length === 18 ? String(row[10] || '') : (row.length === 17 ? String(row[9] || '') : String(row[8] || '')));
-  const detenido = getVal('detenido') ?? (row.length === 18 ? String(row[11] || '') : (row.length === 17 ? String(row[10] || '') : String(row[9] || '')));
+  const revisado = getCol('revisado', 4);
+  const revisarDias = getVal('revisar_dias') ?? getVal('revisar dias') ?? getCol('revisar_dias', 5);
+  const caratula = getCol('caratula', 6);
+  const sumario = getCol('sumario', 7);
+  const denunciadoEn = getVal('denunciado_en') ?? getVal('denunciado en') ?? getCol('denunciado_en', 8);
+  const fechaInicio = getVal('fecha_inicio') ?? getVal('fecha inicio') ?? getVal('fecha_creacion') ?? getCol('fecha_inicio', 9);
+  const tramite = getCol('tramite', 10);
+  const detenido = getCol('detenido', 11);
 
-  const vencimientoPP1 = getVal('vencimiento_pp1') ?? getVal('vencimiento pp1') ?? getVal('vencimiento_pp') ?? (row.length === 18 ? String(row[12] || '') : (row.length === 17 ? String(row[11] || '') : String(row[10] || '')));
-  const vencimientoPP2 = getVal('vencimiento_pp2') ?? getVal('vencimiento pp2') ?? (row.length === 18 ? String(row[13] || '') : (row.length === 17 ? String(row[12] || '') : String(row[11] || '')));
-  const vencimientoIPP = getVal('vencimiento_ipp') ?? getVal('venc_ipp') ?? getVal('vencimiento ipp') ?? getVal('venc. ipp') ?? (row.length === 18 ? String(row[14] || '') : (row.length === 17 ? String(row[13] || '') : String(row[12] || '')));
-  const ppProrrogadaVal = getVal('pp_prorrogada') ?? getVal('pp prorrogada') ?? (row.length === 18 ? String(row[15] || '') : (row.length === 17 ? String(row[14] || '') : String(row[13] || '')));
-  const periciasVal = getVal('pericias') ?? (row.length === 18 ? String(row[16] || '') : (row.length === 17 ? String(row[15] || '') : String(row[14] || '')));
-  const audienciasVal = getVal('audiencias') ?? (row.length === 18 ? String(row[17] || '') : (row.length === 17 ? String(row[16] || '') : String(row[15] || '')));
+  const fechaDetencionVal = getVal('fecha_detencion') ?? getVal('fecha detencion') ?? getCol('fecha_detencion', 12);
+  const vencimientoPP1 = getVal('vencimiento_pp1') ?? getVal('vencimiento pp1') ?? getVal('vencimiento_pp') ?? getCol('vencimiento_pp1', 13);
+  const vencimientoPP2 = getVal('vencimiento_pp2') ?? getVal('vencimiento pp2') ?? getCol('vencimiento_pp2', 14);
+  const vencimientoIPP = getVal('vencimiento_ipp') ?? getVal('venc_ipp') ?? getVal('vencimiento ipp') ?? getVal('venc. ipp') ?? getCol('vencimiento_ipp', 15);
+  const ppProrrogadaVal = getVal('pp_prorrogada') ?? getVal('pp prorrogada') ?? getCol('pp_prorrogada', 16);
+
+  const periciasVal = getCol('pericias', 17);
+  const audienciasVal = getCol('audiencias', 18);
+  const indVal = getCol('indagatoria', 19);
+  const fIndVal = getVal('fecha_indagatoria') ?? getVal('fecha indagatoria') ?? getCol('fecha_indagatoria', 20);
+
+  const ippProrrogasRaw = getVal('ipp_prorrogas') ?? getVal('ipp prorrogas') ?? getCol('ipp_prorrogas', 21);
+  const flagranciaVal = getCol('flagrancia', 22);
+  const fechaFlagranciaVal = getVal('fecha_flagrancia') ?? getVal('fecha flagrancia') ?? getCol('fecha_flagrancia', 23);
+  const flagranciaProrrogadaVal = getVal('flagrancia_prorrogada') ?? getVal('flagrancia prorrogada') ?? getCol('flagrancia_prorrogada', 24);
 
   let pericias = [];
   try {
-    pericias = periciasVal ? JSON.parse(periciasVal) : [];
+    pericias = periciasVal ? (Array.isArray(periciasVal) ? periciasVal : JSON.parse(periciasVal)) : [];
   } catch (e) {
     pericias = [];
   }
 
   let audiencias = [];
   try {
-    audiencias = audienciasVal ? JSON.parse(audienciasVal) : [];
+    audiencias = audienciasVal ? (Array.isArray(audienciasVal) ? audienciasVal : JSON.parse(audienciasVal)) : [];
   } catch (e) {
     audiencias = [];
   }
 
-  const fechaDetencionVal = getVal('fecha_detencion') ?? getVal('fecha detencion') ?? (row.length >= 21 ? String(row[12] || '') : '');
-  const indVal = getVal('indagatoria') ?? (row.length >= 21 ? String(row[19] || '') : '');
-  const fIndVal = getVal('fecha_indagatoria') ?? getVal('fecha indagatoria') ?? (row.length >= 21 ? String(row[20] || '') : '');
+  let ippProrrogas = [];
+  try {
+    ippProrrogas = ippProrrogasRaw ? (Array.isArray(ippProrrogasRaw) ? ippProrrogasRaw : JSON.parse(ippProrrogasRaw)) : [];
+  } catch (e) {
+    ippProrrogas = [];
+  }
 
   return {
-    id: getVal('id') ?? String(row[0] || ''),
-    ipp: getVal('ipp') ?? String(row[1] || ''),
+    id: getCol('id', 0) || String(row[0] || ''),
+    ipp: getCol('ipp', 1) || String(row[1] || ''),
     estado: estadoVal,
     revision: revisionVal || (estadoVal.toLowerCase() === 'en trámite' || estadoVal.toLowerCase() === 'en tramite' ? 'Esperar' : '-'),
     revisado: revisado,
@@ -474,7 +506,11 @@ function rowToCausa(row, headersMap) {
     pericias: pericias,
     audiencias: audiencias,
     indagatoria: indVal || (fIndVal ? 'SI' : 'NO'),
-    fecha_indagatoria: fIndVal
+    fecha_indagatoria: fIndVal,
+    ipp_prorrogas: ippProrrogas,
+    flagrancia: flagranciaVal || 'NO',
+    fecha_flagrancia: fechaFlagranciaVal || '',
+    flagrancia_prorrogada: String(flagranciaProrrogadaVal).toLowerCase() === 'true' || flagranciaProrrogadaVal === true || String(flagranciaProrrogadaVal).toUpperCase() === 'SI'
   };
 }
 
@@ -514,7 +550,11 @@ function causaToRow(c) {
     JSON.stringify(c.pericias || []),
     JSON.stringify(c.audiencias || []),
     c.indagatoria || (c.fecha_indagatoria ? 'SI' : 'NO'),
-    c.fecha_indagatoria || ''
+    c.fecha_indagatoria || '',
+    JSON.stringify(c.ipp_prorrogas || []),
+    c.flagrancia || 'NO',
+    c.fecha_flagrancia || '',
+    c.flagrancia_prorrogada ? 'true' : 'false'
   ];
 }
 
