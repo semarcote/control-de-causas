@@ -498,22 +498,26 @@ export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', fin
   const isAgregada = finalizada === true || st === 'finalizada' || st === 'cumplida' || st === 'agregada';
   const isEnProceso = st === 'en_proceso' || st === 'en proceso' || st.includes('proceso');
 
+  const rawStr = pericia_fecha ? String(pericia_fecha).trim() : '';
+  const dateParts = rawStr.split(/[,;]/).map(d => d.trim()).filter(Boolean);
+  const compactDateLabel = formatCompactMultipleDates(dateParts);
+
   if (isAgregada) {
     return (
       <span key="badge-agregada" className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-300 border border-emerald-500/40 opacity-90" title={`${pericia_detalle} (Agregada / Cumplida)`}>
         <CheckCircle2 className="h-3 w-3 text-emerald-400 text-xs shrink-0" />
-        Agregada
+        {compactDateLabel ? `${compactDateLabel} Agregada` : 'Agregada'}
         {pericia_detalle && <span className="ml-0.5 text-[10px] text-emerald-200/80 font-normal">({pericia_detalle})</span>}
       </span>
     );
   }
 
   if (isEnProceso) {
-    const labelText = pericia_detalle ? `En Proceso (${pericia_detalle})` : 'En Proceso';
     return (
       <span key="badge-en-proceso" className="inline-flex items-center gap-1 rounded bg-purple-500/20 px-2.5 py-0.5 text-xs font-semibold text-purple-300 border border-purple-500/40 whitespace-nowrap shadow-sm" title={`${pericia_detalle || 'Pericia'} (En Proceso)`}>
         <Activity className="h-3.5 w-3.5 text-purple-400 shrink-0" />
-        {labelText}
+        {compactDateLabel ? `${compactDateLabel} En Proceso` : 'En Proceso'}
+        {pericia_detalle && <span className="ml-0.5 text-[10px] text-purple-200/80 font-normal">({pericia_detalle})</span>}
       </span>
     );
   }
@@ -529,10 +533,6 @@ export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', fin
     }
     return <span key="badge-none" className="text-slate-600 font-mono text-xs">-</span>;
   }
-
-  const rawStr = String(pericia_fecha);
-  const dateParts = rawStr.split(/[,;]/).map(d => d.trim()).filter(Boolean);
-  const compactDateLabel = formatCompactMultipleDates(dateParts);
 
   const color = getPericiaColor(pericia_fecha);
 
