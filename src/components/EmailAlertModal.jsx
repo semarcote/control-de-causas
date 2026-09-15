@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Send, Check, CheckCircle2, Loader2, BellOff, X, AlertTriangle, Copy, HelpCircle } from 'lucide-react';
+import { Mail, Send, Check, CheckCircle2, Loader2, BellOff, X, AlertTriangle, Copy, HelpCircle, FileText } from 'lucide-react';
 import { getExpirationEvents } from './ExpirationPanel';
 import {
   sendEmailAlerts,
@@ -19,6 +19,7 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
   const [isTriggerActive, setIsTriggerActive] = useState(false);
   const [emailStatus, setEmailStatus] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [summaryCopied, setSummaryCopied] = useState(false);
   const [showScriptGuide, setShowScriptGuide] = useState(false);
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
       setIsTriggerActive(getStoredTriggerStatus(userName));
       setEmailStatus(null);
       setShowScriptGuide(false);
+      setSummaryCopied(false);
     }
   }, [isOpen, userName]);
 
@@ -37,6 +39,42 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
     navigator.clipboard.writeText(APPS_SCRIPT_TEMPLATE);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleCopySummaryText = () => {
+    const allEvents = getExpirationEvents(causas);
+    const targetEvents = allEvents.filter(evt => evt.days <= diasMaxInput);
+
+    if (targetEvents.length === 0) {
+      setEmailStatus({ type: 'success', text: `No hay vencimientos pendientes en los próximos ${diasMaxInput} días.` });
+      return;
+    }
+
+    let text = `🚨 ALERTAS DE VENCIMIENTO (${targetEvents.length}) - CONTROL DE CAUSAS MPBA\n`;
+    text += `Fecha de emisión: ${new Date().toLocaleDateString('es-AR')} ${new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}\n`;
+    text += `========================================================\n\n`;
+
+    targetEvents.forEach((evt, idx) => {
+      const estadoStr = evt.days < 0 ? `VENCIDO (${Math.abs(evt.days)} días)` : (evt.days === 0 ? '¡VENCE HOY!' : `Vence en ${evt.days} días`);
+      const ippStr = evt.causa?.ipp || '-';
+      const caratulaStr = evt.causa?.caratula || evt.causa?.sumario || '';
+      text += `${idx + 1}. [${estadoStr}] ${evt.tipo}\n   IPP: ${ippStr}\n   Carátula/Sumario: ${caratulaStr}\n   Fecha Vencimiento: ${evt.fecha}\n\n`;
+    });
+
+    navigator.clipboard.writeText(text);
+    setSummaryCopied(true);
+    setTimeout(() => setSummaryCopied(false), 3000);
+  };
+
+  const isScriptError = (msg) => {
+    if (!msg) return false;
+    const norm = String(msg).toLowerCase();
+    return norm.includes('referenceerror') ||
+      norm.includes('is not defined') ||
+      norm.includes('not defined') ||
+      norm.includes('acción no válida') ||
+      norm.includes('función') ||
+      norm.includes('actualizar');
   };
 
   const handleSendEmail = async (e) => {
@@ -49,7 +87,6 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
     try {
       const sheetsUrl = getStoredSheetsUrl();
       
-      // Extraer exactamente los mismos vencimientos procesales que se visualizan en la pantalla
       const allEvents = getExpirationEvents(causas);
       const targetEvents = allEvents
         .filter(evt => evt.days <= diasMaxInput)
@@ -64,15 +101,14 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
       const res = await sendEmailAlerts(sheetsUrl, emailInput.trim(), diasMaxInput, userName, targetEvents);
       setEmailStatus({ type: 'success', text: res.message || 'Reporte enviado con éxito.' });
     } catch (err) {
-      const isInvalidAction = err.message && err.message.toLowerCase().includes('acción no válida');
-      if (isInvalidAction) {
+      if (isScriptError(err.message)) {
         setShowScriptGuide(true);
         setEmailStatus({
           type: 'error',
-          text: 'El código en tu Google Sheets no tiene la función de envío de emails todavía. Debes actualizar el Apps Script en Google (creando una "Nueva Versión").'
+          text: '⚠️ Tu código en Google Sheets necesita ser actualizado. Copia el nuevo código abajo y publica una "Nueva versión" en Google Apps Script.'
         });
       } else {
-        setEmailStatus({ type: 'error', text: err.message || 'Error al enviar el reporte. Verifica la URL de Google Sheets.' });
+        setEmailStatus({ type: 'error', text: err.message || 'Error al enviar el reporte. Verifica la conexión con Google Sheets.' });
       }
     } finally {
       setSendingEmail(false);
@@ -89,23 +125,20 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
       const sheetsUrl = getStoredSheetsUrl();
 
       if (isTriggerActive) {
-        // Desactivar alerta diaria
         const res = await deleteTriggerAlerts(sheetsUrl, userName);
         setIsTriggerActive(false);
         setEmailStatus({ type: 'success', text: res.message || 'Alerta diaria desactivada correctamente.' });
       } else {
-        // Activar alerta diaria
         const res = await createTriggerAlerts(sheetsUrl, emailInput.trim(), diasMaxInput, userName);
         setIsTriggerActive(true);
         setEmailStatus({ type: 'success', text: res.message || 'Alerta diaria (8:00 AM) activada correctamente.' });
       }
     } catch (err) {
-      const isInvalidAction = err.message && err.message.toLowerCase().includes('acción no válida');
-      if (isInvalidAction) {
+      if (isScriptError(err.message)) {
         setShowScriptGuide(true);
         setEmailStatus({
           type: 'error',
-          text: 'El código en tu Google Sheets requiere actualización para activar o desactivar alertas automáticas.'
+          text: '⚠️ Tu código en Google Sheets necesita ser actualizado para activar alertas automáticas.'
         });
       } else {
         setEmailStatus({ type: 'error', text: err.message || 'Error al modificar el activador diario.' });
@@ -260,33 +293,46 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
 
           {/* Script Update Instructions Box */}
           {showScriptGuide && (
-            <div className="p-4 rounded-xl bg-slate-950 border border-amber-500/40 space-y-3">
+            <div className="p-4 rounded-xl bg-slate-950 border border-amber-500/50 space-y-3 animate-fade-in shadow-xl">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 uppercase">
-                  <HelpCircle className="h-4 w-4" /> Pasos para Actualizar Google Apps Script (10 segundos):
+                <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wide">
+                  <HelpCircle className="h-4 w-4 text-amber-400 shrink-0" />
+                  Pasos para Actualizar Google Apps Script (10 segundos):
                 </span>
                 <button
                   type="button"
                   onClick={handleCopyScript}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition shrink-0"
                 >
                   {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-                  {copied ? '¡Código Copiado!' : 'Copiar Código de Script'}
+                  {copied ? '¡Código Copiado!' : '1. Copiar Código'}
                 </button>
               </div>
 
-              <ol className="text-xs text-slate-300 space-y-1.5 list-decimal pl-4">
-                <li>Abre tu hoja de cálculo en <strong>Google Sheets</strong>.</li>
-                <li>Ve al menú superior: <strong>Extensiones &gt; Apps Script</strong>.</li>
-                <li>Borra todo el código actual, pega el nuevo código (usando el botón de arriba) y presiona el ícono de guardar (💾).</li>
-                <li>En la esquina superior derecha, haz clic en: <strong>Implementar &gt; Administrar implementaciones</strong>.</li>
-                <li>Haz clic en el ícono del <strong>Lápiz (Editar)</strong>, en Versión selecciona <strong>"Nueva versión"</strong> y presiona <strong>Implementar</strong>.</li>
-              </ol>
+              <div className="text-xs text-slate-300 space-y-2 border-t border-slate-800/80 pt-2.5">
+                <p className="text-[11px] text-amber-200/90 bg-amber-950/40 p-2 rounded-lg border border-amber-500/20">
+                  💡 <strong>¿Por qué ocurrió el error?</strong> El código en Google Sheets no tiene la función de envío desplegada. Al editar Apps Script en Google, debes seleccionar <strong>"Nueva versión"</strong> para aplicar los cambios.
+                </p>
+                <ol className="space-y-2 list-decimal pl-4 text-slate-300">
+                  <li>
+                    Abre tu planilla en <strong className="text-white">Google Sheets</strong> y ve a: <span className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-300 border border-slate-800">Extensiones &gt; Apps Script</span>.
+                  </li>
+                  <li>
+                    Borra todo el código actual, pega el nuevo código (usando el botón de arriba) y presiona el ícono de <strong className="text-white">Guardar 💾</strong>.
+                  </li>
+                  <li>
+                    En la esquina superior derecha, haz clic en: <span className="bg-blue-950 px-1.5 py-0.5 rounded text-blue-300 font-bold border border-blue-800">Implementar &gt; Administrar implementaciones</span>.
+                  </li>
+                  <li>
+                    Haz clic en el ícono del <strong className="text-amber-300">✏️ Lápiz (Editar)</strong>, en la casilla <i>Versión</i> selecciona <strong className="text-emerald-300">"Nueva versión"</strong> y presiona <strong className="text-white">Implementar</strong>. ¡Listo!
+                  </li>
+                </ol>
+              </div>
             </div>
           )}
 
-          {/* Primary Action Button: Send Email Now */}
-          <div className="pt-2">
+          {/* Action Buttons */}
+          <div className="space-y-2 pt-2">
             <button
               type="submit"
               disabled={sendingEmail || settingTrigger}
@@ -295,7 +341,7 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
               {sendingEmail ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Enviando Reporte de Inmediato...</span>
+                  <span>Enviando Reporte por Email...</span>
                 </>
               ) : (
                 <>
@@ -303,6 +349,16 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
                   <span>Enviar Reporte por Email Ahora</span>
                 </>
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopySummaryText}
+              className="w-full flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 font-semibold py-2.5 px-4 rounded-xl text-xs transition"
+              title="Copiar texto del reporte para pegarlo manualmente en Webmail MPBA o cualquier correo"
+            >
+              {summaryCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4 text-amber-400" />}
+              <span>{summaryCopied ? '¡Resumen Copiado al Portapapeles!' : 'Copiar Resumen para Envío Manual / Webmail'}</span>
             </button>
           </div>
         </form>

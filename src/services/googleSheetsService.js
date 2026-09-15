@@ -750,6 +750,9 @@ function doPost(e) {
       const diasMax = contents.diasMax || 15;
       const customEvents = contents.events || null;
       if (!targetEmail) throw new Error('Se requiere un correo electrónico de destino');
+      if (typeof enviarAlertasVencimientos !== 'function') {
+        throw new Error('La función enviarAlertasVencimientos no está definida en este script de Google. Debes actualizar el Apps Script en Google Sheets (Copiar código -> Implementar -> Nueva versión).');
+      }
       const res = enviarAlertasVencimientos(targetEmail, diasMax, userName, customEvents);
       return jsonResponse(res);
     }
@@ -757,11 +760,17 @@ function doPost(e) {
     if (action === 'create_trigger') {
       const targetEmail = contents.email || contents.userEmail;
       const diasMax = contents.diasMax || 15;
+      if (typeof crearActivadorDiarioAlertas !== 'function') {
+        throw new Error('La función crearActivadorDiarioAlertas no está definida en este script de Google. Debes actualizar el Apps Script en Google Sheets.');
+      }
       const res = crearActivadorDiarioAlertas(targetEmail, diasMax);
       return jsonResponse(res);
     }
 
     if (action === 'delete_trigger' || action === 'deleteTrigger') {
+      if (typeof eliminarActivadorDiarioAlertas !== 'function') {
+        throw new Error('La función eliminarActivadorDiarioAlertas no está definida en este script de Google. Debes actualizar el Apps Script en Google Sheets.');
+      }
       const res = eliminarActivadorDiarioAlertas();
       return jsonResponse(res);
     }
@@ -905,13 +914,25 @@ function enviarAlertasVencimientos(emailDestino, diasMax, userName, customEvents
   html += 'Este es un reporte automático generado desde Control de Causas MPBA.<br/>Emisión: ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') + '';
   html += '</div></div></div>';
 
-  MailApp.sendEmail({
-    to: emailDestino,
-    subject: '🚨 ALERTAS DE VENCIMIENTO (' + alertas.length + ') - CONTROL DE CAUSAS MPBA',
-    htmlBody: html,
-    name: 'Control de Causas — Ministerio Público Fiscal',
-    replyTo: 'no-reply@mpba.gov.ar'
-  });
+  var subjectStr = '🚨 ALERTAS DE VENCIMIENTO (' + alertas.length + ') - CONTROL DE CAUSAS MPBA';
+
+  try {
+    MailApp.sendEmail({
+      to: emailDestino,
+      subject: subjectStr,
+      htmlBody: html,
+      name: 'Control de Causas — Ministerio Público Fiscal'
+    });
+  } catch (e1) {
+    try {
+      GmailApp.sendEmail(emailDestino, subjectStr, 'Ver en formato HTML', {
+        htmlBody: html,
+        name: 'Control de Causas — Ministerio Público Fiscal'
+      });
+    } catch (e2) {
+      return { status: 'error', message: 'No se pudo enviar el correo desde Google: ' + e2.toString() };
+    }
+  }
 
   return { status: 'success', message: 'Correo enviado exitosamente a ' + emailDestino, count: alertas.length };
 }
