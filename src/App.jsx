@@ -23,7 +23,7 @@ import {
   deleteUserFromSheetsTab
 } from './services/googleSheetsService';
 
-import { isFinalizedState, causaHasSumario, getCausaIngresoDate, parseAnyDate, isCausaRevisar, isCausaEsperar } from './components/CausasTable';
+import { isFinalizedState, causaHasSumario, getCausaIngresoDate, parseAnyDate, isCausaRevisar, isCausaEsperar, getVencimientoIPP, checkPPStatusSpecial } from './components/CausasTable';
 
 const STORAGE_KEY = 'control_causas_ufi10_v12';
 const USERS_STORAGE_KEY = 'control_causas_ufi10_users_v2';
@@ -330,6 +330,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('en trámite'); // Default to 'en trámite'
   const [sumarioFilter, setSumarioFilter] = useState('todos'); // 'todos' | 'con_sumario' | 'sin_sumario'
+  const [vencimientoTypeFilter, setVencimientoTypeFilter] = useState('todos'); // 'todos' | 'ipp' | 'pp'
   const [inicioFilter, setInicioFilter] = useState('todos'); // 'todos' | INICIO_OPTIONS
   const [fechaDesdeFilter, setFechaDesdeFilter] = useState(''); // DD/MM/YY filter
   const [sortBy, setSortBy] = useState('ipp-asc'); // 'ipp-asc' | 'ipp-desc' | 'revisar-asc' | 'revisado-desc'
@@ -344,6 +345,32 @@ export default function App() {
     return causas.filter(c => {
       if (isFinalizedState(c.estado, c.tramite)) return false;
       return c.estado?.toLowerCase() === 'revisar';
+    }).length;
+  }, [causas]);
+
+  // Count causes with IPP and PP Expirations
+  const ippCount = useMemo(() => {
+    return causas.filter(c => {
+      if (!c || isFinalizedState(c.estado, c.tramite)) return false;
+      const ippDate = getVencimientoIPP(c);
+      return Boolean(ippDate && !checkPPStatusSpecial(ippDate));
+    }).length;
+  }, [causas]);
+
+  const ppCount = useMemo(() => {
+    return causas.filter(c => {
+      if (!c || isFinalizedState(c.estado, c.tramite)) return false;
+      const isDetenido = c.detenido === 'SI' || c.detenido === 'SÍ';
+      const rawPPVal = c.estado_pp || c.vencimiento_pp1 || c.vencimiento_pp || '';
+      const isPresentada = String(rawPPVal).trim().toLowerCase().includes('presentad');
+      if (isDetenido || isPresentada) {
+        const isProrrogada = c.pp_prorrogada === true || c.pp_prorrogada === 'SI';
+        const vPP = isProrrogada
+          ? (c.vencimiento_pp2 || c.vencimiento_pp1 || c.vencimiento_pp)
+          : (c.vencimiento_pp1 || c.vencimiento_pp);
+        return Boolean(vPP && !checkPPStatusSpecial(vPP));
+      }
+      return false;
     }).length;
   }, [causas]);
 
@@ -416,6 +443,24 @@ export default function App() {
         }
       }
 
+      // 6. Vencimiento Type Filter (IPP / PP)
+      if (vencimientoTypeFilter === 'ipp') {
+        if (isFinalizedState(causa.estado, causa.tramite)) return false;
+        const ippDate = getVencimientoIPP(causa);
+        if (!ippDate || checkPPStatusSpecial(ippDate)) return false;
+      } else if (vencimientoTypeFilter === 'pp') {
+        if (isFinalizedState(causa.estado, causa.tramite)) return false;
+        const isDetenido = causa.detenido === 'SI' || causa.detenido === 'SÍ';
+        const rawPPVal = causa.estado_pp || causa.vencimiento_pp1 || causa.vencimiento_pp || '';
+        const isPresentada = String(rawPPVal).trim().toLowerCase().includes('presentad');
+        if (!isDetenido && !isPresentada) return false;
+        const isProrrogada = causa.pp_prorrogada === true || causa.pp_prorrogada === 'SI';
+        const vPP = isProrrogada
+          ? (causa.vencimiento_pp2 || causa.vencimiento_pp1 || causa.vencimiento_pp)
+          : (causa.vencimiento_pp1 || causa.vencimiento_pp);
+        if (!vPP || checkPPStatusSpecial(vPP)) return false;
+      }
+
       return true;
     }).sort((a, b) => {
       if (sortBy === 'ipp-asc') {
@@ -440,7 +485,7 @@ export default function App() {
       }
       return 0;
     });
-  }, [causas, searchTerm, statusFilter, sumarioFilter, inicioFilter, fechaDesdeFilter, sortBy]);
+  }, [causas, searchTerm, statusFilter, sumarioFilter, vencimientoTypeFilter, inicioFilter, fechaDesdeFilter, sortBy]);
 
   // Handlers
   const handleSaveCausa = (updatedCausa) => {
@@ -525,6 +570,7 @@ export default function App() {
     setSearchTerm('');
     setStatusFilter('en trámite');
     setSumarioFilter('todos');
+    setVencimientoTypeFilter('todos');
     setInicioFilter('todos');
     setFechaDesdeFilter('');
   };
@@ -598,6 +644,10 @@ export default function App() {
               onStatusFilterChange={setStatusFilter}
               sumarioFilter={sumarioFilter}
               onSumarioFilterChange={setSumarioFilter}
+              vencimientoTypeFilter={vencimientoTypeFilter}
+              onVencimientoTypeFilterChange={setVencimientoTypeFilter}
+              ippCount={ippCount}
+              ppCount={ppCount}
               inicioFilter={inicioFilter}
               onInicioFilterChange={setInicioFilter}
               fechaDesdeFilter={fechaDesdeFilter}

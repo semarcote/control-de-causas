@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, ArrowUpDown, X, FileText, MapPin, Calendar } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, X, FileText, MapPin, Calendar, Clock, ShieldAlert } from 'lucide-react';
 import { INICIO_OPTIONS, formatDateMask } from './CausasTable';
 
 export default function FilterBar({
@@ -9,6 +9,10 @@ export default function FilterBar({
   onStatusFilterChange,
   sumarioFilter = 'todos',
   onSumarioFilterChange,
+  vencimientoTypeFilter = 'todos',
+  onVencimientoTypeFilterChange,
+  ippCount = 0,
+  ppCount = 0,
   inicioFilter = 'todos',
   onInicioFilterChange,
   fechaDesdeFilter = '',
@@ -18,7 +22,7 @@ export default function FilterBar({
   totalResults,
   onClearFilters
 }) {
-  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'todos' || sumarioFilter !== 'todos' || (inicioFilter && inicioFilter !== 'todos') || fechaDesdeFilter !== '';
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'todos' || sumarioFilter !== 'todos' || vencimientoTypeFilter !== 'todos' || (inicioFilter && inicioFilter !== 'todos') || fechaDesdeFilter !== '';
 
   const statusChips = [
     { id: 'en trámite', label: 'En Trámite' },
@@ -102,6 +106,41 @@ export default function FilterBar({
               </button>
             );
           })}
+
+          <div className="h-4 w-px bg-slate-800 mx-1 hidden sm:block" />
+
+          {/* Filtros Especiales de Vencimientos IPP y PP */}
+          <button
+            onClick={() => onVencimientoTypeFilterChange && onVencimientoTypeFilterChange(vencimientoTypeFilter === 'ipp' ? 'todos' : 'ipp')}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition border whitespace-nowrap ${
+              vencimientoTypeFilter === 'ipp'
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm ring-1 ring-amber-500/30 font-bold'
+                : 'bg-slate-800/80 text-slate-400 border-slate-700/50 hover:text-slate-200'
+            }`}
+            title="Ver únicamente causas con Vencimiento de I.P.P."
+          >
+            <Clock className="h-3.5 w-3.5 text-amber-400" />
+            <span>Vencimiento IPP</span>
+            <span className={`px-1.5 py-0.2 rounded text-[10px] font-extrabold ${vencimientoTypeFilter === 'ipp' ? 'bg-amber-500/30 text-amber-200' : 'bg-slate-900 text-slate-400'}`}>
+              {ippCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => onVencimientoTypeFilterChange && onVencimientoTypeFilterChange(vencimientoTypeFilter === 'pp' ? 'todos' : 'pp')}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition border whitespace-nowrap ${
+              vencimientoTypeFilter === 'pp'
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-sm ring-1 ring-rose-500/30 font-bold'
+                : 'bg-slate-800/80 text-slate-400 border-slate-700/50 hover:text-slate-200'
+            }`}
+            title="Ver únicamente causas con Vencimiento de Prisión Preventiva (PP)"
+          >
+            <ShieldAlert className="h-3.5 w-3.5 text-rose-400" />
+            <span>Vencimiento PP</span>
+            <span className={`px-1.5 py-0.2 rounded text-[10px] font-extrabold ${vencimientoTypeFilter === 'pp' ? 'bg-rose-500/30 text-rose-200' : 'bg-slate-900 text-slate-400'}`}>
+              {ppCount}
+            </span>
+          </button>
 
           <div className="h-4 w-px bg-slate-800 mx-1 hidden sm:block" />
 
