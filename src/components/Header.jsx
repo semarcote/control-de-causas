@@ -11,6 +11,8 @@ export default function Header({
   onPageChange,
   onNewCausa,
   onOpenEmailModal,
+  onRefreshSheets,
+  isRefreshingSheets = false,
   onExportData,
   onResetData,
   onLogout
@@ -53,6 +55,18 @@ export default function Header({
 
         {/* Quick Action Buttons */}
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          {onRefreshSheets && (
+            <button
+              onClick={onRefreshSheets}
+              disabled={isRefreshingSheets}
+              className="flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 px-3.5 py-2 text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+              title="Sincronizar e importar todos los cambios desde la planilla de Google Sheets"
+            >
+              <RefreshCw className={`h-4 w-4 text-blue-400 ${isRefreshingSheets ? 'animate-spin' : ''}`} />
+              <span className="hidden md:inline">{isRefreshingSheets ? 'Sincronizando...' : 'Sincronizar Sheets'}</span>
+            </button>
+          )}
+
           {onOpenEmailModal && (
             <button
               onClick={onOpenEmailModal}

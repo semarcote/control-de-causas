@@ -60,11 +60,16 @@ function getUserStorageKey(user) {
   return `${STORAGE_KEY}_user_${identifier}`;
 }
 
-function mergeCausas(localList = [], remoteList = []) {
-  if (!Array.isArray(remoteList) || remoteList.length === 0) return localList;
-  if (!Array.isArray(localList) || localList.length === 0) return remoteList;
+function mergeRemoteAndLocalCausas(remoteList = [], localList = []) {
+  if (!Array.isArray(remoteList)) return localList || [];
+  if (remoteList.length === 0 && Array.isArray(localList) && localList.length > 0) {
+    return localList;
+  }
 
+  // Google Sheets is the Single Source of Truth for remote dataset
   const map = new Map();
+
+  // 1. Add all causes fetched directly from Google Sheets
   remoteList.forEach(r => {
     if (r && (r.id || r.ipp)) {
       const key = String(r.id || r.ipp).trim().toLowerCase();
@@ -72,48 +77,17 @@ function mergeCausas(localList = [], remoteList = []) {
     }
   });
 
-  localList.forEach(l => {
-    if (l && (l.id || l.ipp)) {
-      const key = String(l.id || l.ipp).trim().toLowerCase();
-      const existing = map.get(key);
-      if (!existing) {
-        map.set(key, l);
-      } else {
-        const localTramiteLen = (l.tramite || '').length;
-        const remoteTramiteLen = (existing.tramite || '').length;
-        const mergedTramite = localTramiteLen >= remoteTramiteLen ? l.tramite : existing.tramite;
-
-        // Combine pericias from remote and local without losing entries
-        const combinedPericias = new Map();
-        (existing.pericias || []).forEach(p => p && combinedPericias.set(p.id || `${p.tipo}-${p.fecha}`, p));
-        (l.pericias || []).forEach(p => p && combinedPericias.set(p.id || `${p.tipo}-${p.fecha}`, p));
-
-        // Combine audiencias from remote and local without losing entries
-        const combinedAudiencias = new Map();
-        (existing.audiencias || []).forEach(a => a && combinedAudiencias.set(a.id || `${a.tipo}-${a.fecha}-${a.hora}`, a));
-        (l.audiencias || []).forEach(a => a && combinedAudiencias.set(a.id || `${a.tipo}-${a.fecha}-${a.hora}`, a));
-
-        map.set(key, {
-          ...existing,
-          ...l,
-          tramite: mergedTramite,
-          estado: l.estado || existing.estado,
-          vencimiento_ipp: l.vencimiento_ipp || existing.vencimiento_ipp,
-          vencimiento_pp1: l.vencimiento_pp1 || existing.vencimiento_pp1,
-          vencimiento_pp2: l.vencimiento_pp2 || existing.vencimiento_pp2,
-          indagatoria: l.indagatoria || existing.indagatoria,
-          fecha_indagatoria: l.fecha_indagatoria || existing.fecha_indagatoria,
-          fecha_detencion: l.fecha_detencion || existing.fecha_detencion,
-          ipp_prorrogas: Array.isArray(l.ipp_prorrogas) && l.ipp_prorrogas.length > 0 ? l.ipp_prorrogas : (existing ? existing.ipp_prorrogas : []),
-          flagrancia: l.flagrancia || existing.flagrancia,
-          fecha_flagrancia: l.fecha_flagrancia || existing.fecha_flagrancia,
-          flagrancia_prorrogada: l.flagrancia_prorrogada !== undefined ? l.flagrancia_prorrogada : existing.flagrancia_prorrogada,
-          audiencias: Array.from(combinedAudiencias.values()),
-          pericias: Array.from(combinedPericias.values())
-        });
+  // 2. Keep only newly created local causes that have not synced to Sheets yet
+  if (Array.isArray(localList)) {
+    localList.forEach(l => {
+      if (l && (l.id || l.ipp)) {
+        const key = String(l.id || l.ipp).trim().toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, l);
+        }
       }
-    }
-  });
+    });
+  }
 
   return Array.from(map.values());
 }
@@ -274,6 +248,31 @@ export default function App() {
     return [];
   });
 
+  const [isRefreshingSheets, setIsRefreshingSheets] = useState(false);
+
+  const handleRefreshFromSheets = async () => {
+    if (!currentUser) return;
+    const url = getStoredSheetsUrl();
+    const targetUserName = (currentUser.name || '').trim().toUpperCase();
+    if (!url || !targetUserName) return;
+
+    setIsRefreshingSheets(true);
+    try {
+      const remoteCausas = await fetchCausasFromSheets(url, targetUserName);
+      if (Array.isArray(remoteCausas)) {
+        const currentKey = getUserStorageKey(currentUser);
+        const merged = mergeRemoteAndLocalCausas(remoteCausas, causas);
+        setCausas(merged);
+        setLoadedUserKey(currentKey);
+        localStorage.setItem(currentKey, JSON.stringify(merged));
+      }
+    } catch (err) {
+      console.warn('Error syncing from Google Sheets:', err);
+    } finally {
+      setIsRefreshingSheets(false);
+    }
+  };
+
   // Re-load dataset and fetch Google Sheets data strictly for current active user (Google Sheets is Single Source of Truth)
   useEffect(() => {
     if (!currentUser) {
@@ -316,6 +315,30 @@ export default function App() {
           console.warn('Google Sheets fetch notice for', targetUserName, err);
         });
     }
+  }, [currentUser?.id, currentUser?.name]);
+
+  // Periodic background refresh from Google Sheets every 30 seconds
+  useEffect(() => {
+    if (!currentUser) return;
+    const interval = setInterval(() => {
+      const url = getStoredSheetsUrl();
+      const targetUserName = (currentUser.name || '').trim().toUpperCase();
+      if (url && targetUserName) {
+        fetchCausasFromSheets(url, targetUserName)
+          .then((remoteCausas) => {
+            if (Array.isArray(remoteCausas)) {
+              const currentKey = getUserStorageKey(currentUser);
+              setCausas(prev => {
+                const merged = mergeRemoteAndLocalCausas(remoteCausas, prev);
+                localStorage.setItem(currentKey, JSON.stringify(merged));
+                return merged;
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    }, 30000);
+    return () => clearInterval(interval);
   }, [currentUser?.id, currentUser?.name]);
 
   // Save to user-scoped localStorage ONLY when loadedUserKey matches active currentUser
@@ -620,6 +643,8 @@ export default function App() {
         onPageChange={setActivePage}
         onNewCausa={() => setIsCreating(true)}
         onOpenEmailModal={() => setIsEmailModalOpen(true)}
+        onRefreshSheets={handleRefreshFromSheets}
+        isRefreshingSheets={isRefreshingSheets}
         onExportData={handleExportData}
         onResetData={handleResetData}
         onLogout={handleLogout}
