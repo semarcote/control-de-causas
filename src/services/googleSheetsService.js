@@ -760,10 +760,11 @@ function doPost(e) {
     if (action === 'create_trigger') {
       const targetEmail = contents.email || contents.userEmail;
       const diasMax = contents.diasMax || 15;
+      const targetUserName = contents.userName || (typeof contents.user === 'string' ? contents.user : (contents.user && contents.user.name ? contents.user.name : null));
       if (typeof crearActivadorDiarioAlertas !== 'function') {
         throw new Error('La función crearActivadorDiarioAlertas no está definida en este script de Google. Debes actualizar el Apps Script en Google Sheets.');
       }
-      const res = crearActivadorDiarioAlertas(targetEmail, diasMax);
+      const res = crearActivadorDiarioAlertas(targetEmail, diasMax, targetUserName);
       return jsonResponse(res);
     }
 
@@ -937,7 +938,7 @@ function enviarAlertasVencimientos(emailDestino, diasMax, userName, customEvents
   return { status: 'success', message: 'Correo enviado exitosamente a ' + emailDestino, count: alertas.length };
 }
 
-function crearActivadorDiarioAlertas(emailDestino, diasMax) {
+function crearActivadorDiarioAlertas(emailDestino, diasMax, userName) {
   emailDestino = emailDestino || Session.getActiveUser().getEmail();
   diasMax = diasMax || 15;
   var triggers = ScriptApp.getProjectTriggers();
@@ -953,6 +954,11 @@ function crearActivadorDiarioAlertas(emailDestino, diasMax) {
     .create();
   PropertiesService.getScriptProperties().setProperty('EMAIL_ALERTA_DESTINO', emailDestino);
   PropertiesService.getScriptProperties().setProperty('DIAS_ALERTA_MAX', String(diasMax));
+  if (userName) {
+    PropertiesService.getScriptProperties().setProperty('USER_NAME_ALERTA', String(userName));
+  } else {
+    PropertiesService.getScriptProperties().deleteProperty('USER_NAME_ALERTA');
+  }
   return { status: 'success', message: 'Activador diario de alertas (8:00 AM) programado para ' + emailDestino };
 }
 
@@ -964,14 +970,16 @@ function eliminarActivadorDiarioAlertas() {
     }
   }
   PropertiesService.getScriptProperties().deleteProperty('EMAIL_ALERTA_DESTINO');
+  PropertiesService.getScriptProperties().deleteProperty('USER_NAME_ALERTA');
   return { status: 'success', message: 'Alerta diaria desactivada correctamente' };
 }
 
 function ejecutarAlertaDiariaVencimientos() {
   var email = PropertiesService.getScriptProperties().getProperty('EMAIL_ALERTA_DESTINO') || Session.getActiveUser().getEmail();
   var dias = parseInt(PropertiesService.getScriptProperties().getProperty('DIAS_ALERTA_MAX') || '15', 10);
+  var userName = PropertiesService.getScriptProperties().getProperty('USER_NAME_ALERTA') || null;
   if (email) {
-    enviarAlertasVencimientos(email, dias);
+    return enviarAlertasVencimientos(email, dias, userName);
   }
 }
 `;
@@ -1335,10 +1343,12 @@ export async function createTriggerAlerts(url, email, diasMax = 15, userName = n
   if (!url) throw new Error('URL de Google Apps Script no configurada');
   if (!email) throw new Error('Debes ingresar una dirección de correo de destino');
 
+  const targetUserName = userName ? String(userName).trim().toUpperCase() : null;
   const result = await postToAppsScript(url, {
     action: 'create_trigger',
     email: email.trim(),
-    diasMax: Number(diasMax) || 15
+    diasMax: Number(diasMax) || 15,
+    userName: targetUserName
   });
 
   setStoredEmailConfig(email, userName);
