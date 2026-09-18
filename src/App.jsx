@@ -23,7 +23,7 @@ import {
   deleteUserFromSheetsTab
 } from './services/googleSheetsService';
 
-import { isFinalizedState, causaHasSumario, getCausaIngresoDate, parseAnyDate, isCausaRevisar, isCausaEsperar, getVencimientoIPP, checkPPStatusSpecial } from './components/CausasTable';
+import { isFinalizedState, causaHasSumario, getCausaIngresoDate, parseAnyDate, isCausaRevisar, isCausaEsperar, getVencimientoIPP, checkPPStatusSpecial, hasPericias } from './components/CausasTable';
 
 const STORAGE_KEY = 'control_causas_ufi10_v12';
 const USERS_STORAGE_KEY = 'control_causas_ufi10_users_v2';
@@ -372,6 +372,13 @@ export default function App() {
     }).length;
   }, [causas]);
 
+  const periciasCount = useMemo(() => {
+    return causas.filter(c => {
+      if (!c || isFinalizedState(c.estado, c.tramite)) return false;
+      return hasPericias(c);
+    }).length;
+  }, [causas]);
+
   // Filtered & Sorted Dataset
   const filteredCausas = useMemo(() => {
     return causas.filter(causa => {
@@ -457,6 +464,9 @@ export default function App() {
           ? (causa.vencimiento_pp2 || causa.vencimiento_pp1 || causa.vencimiento_pp)
           : (causa.vencimiento_pp1 || causa.vencimiento_pp);
         if (!vPP || checkPPStatusSpecial(vPP)) return false;
+      } else if (vencimientoTypeFilter === 'pericias') {
+        if (isFinalizedState(causa.estado, causa.tramite)) return false;
+        if (!hasPericias(causa)) return false;
       }
 
       return true;
@@ -646,6 +656,7 @@ export default function App() {
               onVencimientoTypeFilterChange={setVencimientoTypeFilter}
               ippCount={ippCount}
               ppCount={ppCount}
+              periciasCount={periciasCount}
               inicioFilter={inicioFilter}
               onInicioFilterChange={setInicioFilter}
               fechaDesdeFilter={fechaDesdeFilter}

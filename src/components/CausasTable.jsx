@@ -499,6 +499,24 @@ export function formatCompactMultipleDates(dateParts) {
   return `${initialRaw} y ${lastRaw}`;
 }
 
+export function hasPericias(causa) {
+  if (!causa) return false;
+  if (Array.isArray(causa.pericias) && causa.pericias.length > 0) {
+    return true;
+  }
+  if (typeof causa.pericias === 'string' && causa.pericias.trim()) {
+    try {
+      const parsed = JSON.parse(causa.pericias);
+      if (Array.isArray(parsed) && parsed.length > 0) return true;
+    } catch (e) {}
+  }
+  const pf = causa.pericia_fecha ? String(causa.pericia_fecha).trim() : '';
+  const pd = causa.pericia_detalle ? String(causa.pericia_detalle).trim() : '';
+  if (pf && pf !== '-' && pf.toLowerCase() !== 'no' && pf.toLowerCase() !== 'sin fecha') return true;
+  if (pd && pd !== '-' && pd.toLowerCase() !== 'no') return true;
+  return false;
+}
+
 export function getPericiaColor(pericia_fecha) {
   if (!pericia_fecha) return 'blue';
   const str = String(pericia_fecha).trim();

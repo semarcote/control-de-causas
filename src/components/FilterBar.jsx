@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, ArrowUpDown, X, FileText, MapPin, Calendar, Clock, ShieldAlert } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, X, FileText, MapPin, Calendar, Clock, ShieldAlert, Activity } from 'lucide-react';
 import { INICIO_OPTIONS, formatDateMask } from './CausasTable';
 
 export default function FilterBar({
@@ -13,6 +13,7 @@ export default function FilterBar({
   onVencimientoTypeFilterChange,
   ippCount = 0,
   ppCount = 0,
+  periciasCount = 0,
   inicioFilter = 'todos',
   onInicioFilterChange,
   fechaDesdeFilter = '',
@@ -139,6 +140,22 @@ export default function FilterBar({
             <span>Vencimiento PP</span>
             <span className={`px-1.5 py-0.2 rounded text-[10px] font-extrabold ${vencimientoTypeFilter === 'pp' ? 'bg-rose-500/30 text-rose-200' : 'bg-slate-900 text-slate-400'}`}>
               {ppCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => onVencimientoTypeFilterChange && onVencimientoTypeFilterChange(vencimientoTypeFilter === 'pericias' ? 'todos' : 'pericias')}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition border whitespace-nowrap ${
+              vencimientoTypeFilter === 'pericias'
+                ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm ring-1 ring-purple-500/30 font-bold'
+                : 'bg-slate-800/80 text-slate-400 border-slate-700/50 hover:text-slate-200'
+            }`}
+            title="Ver únicamente causas con Pericias registradas o programadas"
+          >
+            <Activity className="h-3.5 w-3.5 text-purple-400" />
+            <span>Solo Pericias</span>
+            <span className={`px-1.5 py-0.2 rounded text-[10px] font-extrabold ${vencimientoTypeFilter === 'pericias' ? 'bg-purple-500/30 text-purple-200' : 'bg-slate-900 text-slate-400'}`}>
+              {periciasCount}
             </span>
           </button>
 
