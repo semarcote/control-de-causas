@@ -248,31 +248,6 @@ export default function App() {
     return [];
   });
 
-  const [isRefreshingSheets, setIsRefreshingSheets] = useState(false);
-
-  const handleRefreshFromSheets = async () => {
-    if (!currentUser) return;
-    const url = getStoredSheetsUrl();
-    const targetUserName = (currentUser.name || '').trim().toUpperCase();
-    if (!url || !targetUserName) return;
-
-    setIsRefreshingSheets(true);
-    try {
-      const remoteCausas = await fetchCausasFromSheets(url, targetUserName);
-      if (Array.isArray(remoteCausas)) {
-        const currentKey = getUserStorageKey(currentUser);
-        const merged = mergeRemoteAndLocalCausas(remoteCausas, causas);
-        setCausas(merged);
-        setLoadedUserKey(currentKey);
-        localStorage.setItem(currentKey, JSON.stringify(merged));
-      }
-    } catch (err) {
-      console.warn('Error syncing from Google Sheets:', err);
-    } finally {
-      setIsRefreshingSheets(false);
-    }
-  };
-
   // Re-load dataset and fetch Google Sheets data strictly for current active user (Google Sheets is Single Source of Truth)
   useEffect(() => {
     if (!currentUser) {
@@ -643,8 +618,6 @@ export default function App() {
         onPageChange={setActivePage}
         onNewCausa={() => setIsCreating(true)}
         onOpenEmailModal={() => setIsEmailModalOpen(true)}
-        onRefreshSheets={handleRefreshFromSheets}
-        isRefreshingSheets={isRefreshingSheets}
         onExportData={handleExportData}
         onResetData={handleResetData}
         onLogout={handleLogout}
