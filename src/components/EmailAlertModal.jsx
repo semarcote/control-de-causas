@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Send, Check, CheckCircle2, Loader2, BellOff, X, AlertTriangle, Copy, HelpCircle, FileText } from 'lucide-react';
+import { Mail, Send, Check, CheckCircle2, Loader2, BellOff, X, AlertTriangle, Copy, HelpCircle } from 'lucide-react';
 import { getExpirationEvents } from './ExpirationPanel';
 import {
   sendEmailAlerts,
@@ -19,7 +19,6 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
   const [isTriggerActive, setIsTriggerActive] = useState(false);
   const [emailStatus, setEmailStatus] = useState(null);
   const [copied, setCopied] = useState(false);
-  const [summaryCopied, setSummaryCopied] = useState(false);
   const [showScriptGuide, setShowScriptGuide] = useState(false);
 
   useEffect(() => {
@@ -29,7 +28,6 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
       setIsTriggerActive(getStoredTriggerStatus(userName));
       setEmailStatus(null);
       setShowScriptGuide(false);
-      setSummaryCopied(false);
     }
   }, [isOpen, userName]);
 
@@ -39,31 +37,6 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
     navigator.clipboard.writeText(APPS_SCRIPT_TEMPLATE);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
-  };
-
-  const handleCopySummaryText = () => {
-    const allEvents = getExpirationEvents(causas);
-    const targetEvents = allEvents.filter(evt => evt.days <= diasMaxInput);
-
-    if (targetEvents.length === 0) {
-      setEmailStatus({ type: 'success', text: `No hay vencimientos pendientes en los próximos ${diasMaxInput} días.` });
-      return;
-    }
-
-    let text = `🚨 ALERTAS DE VENCIMIENTO (${targetEvents.length}) - CONTROL DE CAUSAS MPBA\n`;
-    text += `Fecha de emisión: ${new Date().toLocaleDateString('es-AR')} ${new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}\n`;
-    text += `========================================================\n\n`;
-
-    targetEvents.forEach((evt, idx) => {
-      const estadoStr = evt.days < 0 ? `VENCIDO (${Math.abs(evt.days)} días)` : (evt.days === 0 ? '¡VENCE HOY!' : `Vence en ${evt.days} días`);
-      const ippStr = evt.causa?.ipp || '-';
-      const caratulaStr = evt.causa?.caratula || evt.causa?.sumario || '';
-      text += `${idx + 1}. [${estadoStr}] ${evt.tipo}\n   IPP: ${ippStr}\n   Carátula/Sumario: ${caratulaStr}\n   Fecha Vencimiento: ${evt.fecha}\n\n`;
-    });
-
-    navigator.clipboard.writeText(text);
-    setSummaryCopied(true);
-    setTimeout(() => setSummaryCopied(false), 3000);
   };
 
   const isScriptError = (msg) => {
@@ -332,7 +305,7 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
           )}
 
           {/* Action Buttons */}
-          <div className="space-y-2 pt-2">
+          <div className="pt-2">
             <button
               type="submit"
               disabled={sendingEmail || settingTrigger}
@@ -349,16 +322,6 @@ export default function EmailAlertModal({ isOpen, onClose, causas, userName }) {
                   <span>Enviar Reporte por Email Ahora</span>
                 </>
               )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCopySummaryText}
-              className="w-full flex items-center justify-center gap-2 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 font-semibold py-2.5 px-4 rounded-xl text-xs transition"
-              title="Copiar texto del reporte para pegarlo manualmente en Webmail MPBA o cualquier correo"
-            >
-              {summaryCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4 text-amber-400" />}
-              <span>{summaryCopied ? '¡Resumen Copiado al Portapapeles!' : 'Copiar Resumen para Envío Manual / Webmail'}</span>
             </button>
           </div>
         </form>
