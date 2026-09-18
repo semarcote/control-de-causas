@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, Clock, FileText, Calendar, Edit3, Plus, Shield, MapPin, Gavel, CheckCircle2, AlertTriangle, Send, RotateCcw, Trash2, Unlock, UserCheck, ChevronLeft, ChevronRight, ArrowRight, Activity } from 'lucide-react';
-import { renderBadgeEstado, isFinalizedState, isAbusoSexual, renderBadgePericia, renderMultiplePericiasBadges, renderBadgePP, calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, extractAndFormatDateFromActuacion, isDateInFuture, isValidDateString, INICIO_OPTIONS, formatDisplayDate, parseAnyDate, isPPMaxDaysExceeded, calculate4MonthsIPPDate, calculateIPPDateWithMonths, parseIPPProrrogas } from './CausasTable';
+import { renderBadgeEstado, isFinalizedState, isAbusoSexual, renderBadgePericia, renderMultiplePericiasBadges, renderBadgePP, renderBadgeIPP, calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, extractAndFormatDateFromActuacion, isDateInFuture, isValidDateString, INICIO_OPTIONS, formatDisplayDate, parseAnyDate, isPPMaxDaysExceeded, calculate4MonthsIPPDate, calculateIPPDateWithMonths, parseIPPProrrogas } from './CausasTable';
 import OrigenSelect from './OrigenSelect';
 
 const monthNames = [
@@ -812,8 +812,8 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                   {renderBadgePP(causa)}
                 </div>
                 <div>
-                  <span className="text-slate-500 block">Vencimiento IPP</span>
-                  <span className="font-mono text-amber-300 font-semibold">{formatDisplayDate(causa.vencimiento_ipp) || '-'}</span>
+                  <span className="text-slate-500 block mb-0.5">Vencimiento IPP</span>
+                  {renderBadgeIPP(causa.vencimiento_ipp, causa)}
                 </div>
                 <div>
                   <span className="text-slate-500 block mb-0.5">Pericia Programada</span>

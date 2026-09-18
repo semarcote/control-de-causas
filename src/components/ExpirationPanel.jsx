@@ -1,30 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar, AlertTriangle, Clock, ChevronDown, ChevronUp, ShieldAlert, ArrowRight, ExternalLink, Filter, Mail, Send, Check, Loader2, Bell, X } from 'lucide-react';
-import { isFinalizedState, renderBadgePP, renderBadgeEstado, renderBadgePericia, formatDisplayDate, checkPPStatusSpecial, getVencimientoIPP } from './CausasTable';
+import { isFinalizedState, renderBadgePP, renderBadgeEstado, renderBadgePericia, formatDisplayDate, checkPPStatusSpecial, getVencimientoIPP, getDaysRemaining } from './CausasTable';
 import { sendEmailAlerts, getStoredEmailConfig, getStoredSheetsUrl, createTriggerAlerts } from '../services/googleSheetsService';
 
-// Helper to calculate days remaining from DD/MM/YY, DD/MM/YYYY or GMT Date strings
-export function getDaysRemaining(dateStr) {
-  if (!dateStr || dateStr === '-' || dateStr === 'Sin fecha') return null;
-
-  const formatted = formatDisplayDate(dateStr);
-  const parts = formatted.trim().split('/');
-  if (parts.length < 3) return null;
-
-  const day = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1;
-  let year = parseInt(parts[2], 10);
-  if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
-  if (year < 100) year += 2000;
-
-  const targetDate = new Date(year, month, day);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const diffTime = targetDate - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-}
+export { getDaysRemaining };
 
 // Extract all expiration events from active causes
 export function getExpirationEvents(causas) {

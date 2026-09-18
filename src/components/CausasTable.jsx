@@ -276,6 +276,20 @@ export function getVencimientoIPP(causa) {
   return formatDisplayDate(str) || '';
 }
 
+export function getDaysRemaining(dateInput) {
+  if (!dateInput || dateInput === '-' || dateInput === 'Sin fecha') return null;
+
+  const parsed = parseAnyDate(dateInput);
+  if (!parsed) return null;
+
+  const targetDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const diffTime = targetDate.getTime() - today.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
 export function renderBadgeIPP(vencIPP, causa = null) {
   const rawVal = vencIPP || (causa ? getVencimientoIPP(causa) : '');
   if (!rawVal) {
@@ -292,9 +306,34 @@ export function renderBadgeIPP(vencIPP, causa = null) {
     return <span className="text-slate-600 font-mono text-xs">-</span>;
   }
 
+  const days = getDaysRemaining(rawVal);
+
+  let badgeColorClass = 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20';
+  let iconColorClass = 'text-emerald-400';
+
+  if (days !== null) {
+    if (days <= 7) {
+      // Menos de una semana (o ya vencido) -> Rojo
+      badgeColorClass = 'text-rose-300 bg-rose-500/20 border-rose-500/40 shadow-sm shadow-rose-950/20';
+      iconColorClass = 'text-rose-400';
+    } else if (days <= 30) {
+      // Menos de un mes pero más de una semana (8 a 30 días) -> Amarillo
+      badgeColorClass = 'text-amber-300 bg-amber-500/10 border-amber-500/20';
+      iconColorClass = 'text-amber-400';
+    } else {
+      // Más de un mes (> 30 días) -> Verde
+      badgeColorClass = 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20';
+      iconColorClass = 'text-emerald-400';
+    }
+  }
+
+  const titleText = days !== null
+    ? (days < 0 ? `Vencimiento IPP: Vencido hace ${Math.abs(days)}d (${formatted})` : days === 0 ? `Vencimiento IPP: ¡Vence hoy! (${formatted})` : `Vencimiento IPP: Faltan ${days}d (${formatted})`)
+    : `Vencimiento de la Instrucción Penal Preparatoria (IPP)`;
+
   return (
-    <span className="inline-flex items-center gap-1 font-mono text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20" title="Vencimiento de la Instrucción Penal Preparatoria (IPP)">
-      <Calendar className="h-3 w-3 text-amber-400" />
+    <span className={`inline-flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded border ${badgeColorClass}`} title={titleText}>
+      <Calendar className={`h-3 w-3 ${iconColorClass}`} />
       {formatted}
     </span>
   );
