@@ -1214,7 +1214,7 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
       <div
         ref={tableContainerRef}
         onScroll={handleTableScroll}
-        className="overflow-x-auto rounded-t-xl"
+        className="overflow-x-auto no-scrollbar rounded-t-xl"
       >
         <table className="w-full text-left text-xs border-collapse min-w-[1200px]">
           <thead className="bg-slate-900/95 text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0 z-20 backdrop-blur-md shadow-sm">
