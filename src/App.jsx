@@ -60,29 +60,52 @@ function getUserStorageKey(user) {
   return `${STORAGE_KEY}_user_${identifier}`;
 }
 
-function mergeRemoteAndLocalCausas(remoteList = [], localList = []) {
+function mergeRemoteAndLocalCausas(remoteList = [], localList = [], localSaveTimestamps = {}) {
   if (!Array.isArray(remoteList)) return localList || [];
   if (remoteList.length === 0 && Array.isArray(localList) && localList.length > 0) {
     return localList;
   }
 
-  // Google Sheets is the Single Source of Truth for remote dataset
+  const now = Date.now();
+  const RECENT_SAVE_WINDOW_MS = 180000; // 3 minutes grace period for local edits to sync completely
+
   const map = new Map();
 
-  // 1. Add all causes fetched directly from Google Sheets
+  // 1. Add all remote causes fetched from Google Sheets unless recently deleted locally
   remoteList.forEach(r => {
     if (r && (r.id || r.ipp)) {
-      const key = String(r.id || r.ipp).trim().toLowerCase();
+      const idKey = String(r.id || '').trim().toLowerCase();
+      const ippKey = String(r.ipp || '').trim().toLowerCase();
+      const key = idKey || ippKey;
+
+      const isDeletedId = idKey && localSaveTimestamps[`deleted_${idKey}`] && (now - localSaveTimestamps[`deleted_${idKey}`] < RECENT_SAVE_WINDOW_MS);
+      const isDeletedIpp = ippKey && localSaveTimestamps[`deleted_${ippKey}`] && (now - localSaveTimestamps[`deleted_${ippKey}`] < RECENT_SAVE_WINDOW_MS);
+      if (isDeletedId || isDeletedIpp) return;
+
       map.set(key, r);
     }
   });
 
-  // 2. Keep only newly created local causes that have not synced to Sheets yet
+  // 2. Keep local causes if they are not in remote yet OR if they were recently saved locally
   if (Array.isArray(localList)) {
     localList.forEach(l => {
       if (l && (l.id || l.ipp)) {
-        const key = String(l.id || l.ipp).trim().toLowerCase();
+        const idKey = String(l.id || '').trim().toLowerCase();
+        const ippKey = String(l.ipp || '').trim().toLowerCase();
+        const key = idKey || ippKey;
+
+        const isDeletedId = idKey && localSaveTimestamps[`deleted_${idKey}`] && (now - localSaveTimestamps[`deleted_${idKey}`] < RECENT_SAVE_WINDOW_MS);
+        const isDeletedIpp = ippKey && localSaveTimestamps[`deleted_${ippKey}`] && (now - localSaveTimestamps[`deleted_${ippKey}`] < RECENT_SAVE_WINDOW_MS);
+        if (isDeletedId || isDeletedIpp) return;
+
+        const lastSaveId = idKey ? localSaveTimestamps[idKey] : 0;
+        const lastSaveIpp = ippKey ? localSaveTimestamps[ippKey] : 0;
+        const lastSave = Math.max(lastSaveId || 0, lastSaveIpp || 0);
+
         if (!map.has(key)) {
+          map.set(key, l);
+        } else if (lastSave > 0 && (now - lastSave < RECENT_SAVE_WINDOW_MS)) {
+          // Preserve local version because it was edited recently
           map.set(key, l);
         }
       }
@@ -231,6 +254,16 @@ export default function App() {
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
+  // Track recent local edits timestamps to prevent 30s background fetch race conditions
+  const recentEditsRef = React.useRef({});
+
+  const markLocalEdit = (causa) => {
+    if (!causa) return;
+    const now = Date.now();
+    if (causa.id) recentEditsRef.current[String(causa.id).trim().toLowerCase()] = now;
+    if (causa.ipp) recentEditsRef.current[String(causa.ipp).trim().toLowerCase()] = now;
+  };
+
   // Track which user's dataset is loaded in `causas` state
   const [loadedUserKey, setLoadedUserKey] = useState(() => getUserStorageKey(currentUser));
 
@@ -280,7 +313,7 @@ export default function App() {
       fetchCausasFromSheets(url, targetUserName)
         .then((remoteCausas) => {
           if (Array.isArray(remoteCausas)) {
-            const merged = mergeRemoteAndLocalCausas(remoteCausas, initialLocal);
+            const merged = mergeRemoteAndLocalCausas(remoteCausas, initialLocal, recentEditsRef.current);
             setCausas(merged);
             setLoadedUserKey(currentKey);
             localStorage.setItem(currentKey, JSON.stringify(merged));
@@ -304,7 +337,7 @@ export default function App() {
             if (Array.isArray(remoteCausas)) {
               const currentKey = getUserStorageKey(currentUser);
               setCausas(prev => {
-                const merged = mergeRemoteAndLocalCausas(remoteCausas, prev);
+                const merged = mergeRemoteAndLocalCausas(remoteCausas, prev, recentEditsRef.current);
                 localStorage.setItem(currentKey, JSON.stringify(merged));
                 return merged;
               });
@@ -498,9 +531,14 @@ export default function App() {
   // Handlers
   const handleSaveCausa = (updatedCausa) => {
     if (!updatedCausa) return;
-    let nextList = [];
+    markLocalEdit(updatedCausa);
+
     setCausas(prev => {
-      nextList = prev.map(c => (c.id === updatedCausa.id || (c.ipp && c.ipp === updatedCausa.ipp)) ? updatedCausa : c);
+      const nextList = prev.map(c => (c.id === updatedCausa.id || (c.ipp && c.ipp === updatedCausa.ipp)) ? updatedCausa : c);
+      if (currentUser) {
+        const currentKey = getUserStorageKey(currentUser);
+        localStorage.setItem(currentKey, JSON.stringify(nextList));
+      }
       return nextList;
     });
 
@@ -511,7 +549,6 @@ export default function App() {
     const sheetsUrl = getStoredSheetsUrl();
     if (sheetsUrl) {
       updateCausaInSheets(sheetsUrl, updatedCausa, currentUser?.name).catch(e => console.error('Background sync save error:', e));
-      syncAllToSheets(sheetsUrl, nextList, currentUser?.name).catch(e => console.error('Background sync full error:', e));
     }
   };
 
@@ -526,7 +563,17 @@ export default function App() {
       revisar_dias: '30',
       tramite: updatedTramite
     };
-    setCausas(prev => prev.map(c => c.id === causa.id ? updated : c));
+
+    markLocalEdit(updated);
+
+    setCausas(prev => {
+      const nextList = prev.map(c => c.id === causa.id ? updated : c);
+      if (currentUser) {
+        const currentKey = getUserStorageKey(currentUser);
+        localStorage.setItem(currentKey, JSON.stringify(nextList));
+      }
+      return nextList;
+    });
 
     const sheetsUrl = getStoredSheetsUrl();
     if (sheetsUrl) {
@@ -535,7 +582,16 @@ export default function App() {
   };
 
   const handleCreateCausa = (newCausa) => {
-    setCausas(prev => [newCausa, ...prev]);
+    markLocalEdit(newCausa);
+
+    setCausas(prev => {
+      const nextList = [newCausa, ...prev];
+      if (currentUser) {
+        const currentKey = getUserStorageKey(currentUser);
+        localStorage.setItem(currentKey, JSON.stringify(nextList));
+      }
+      return nextList;
+    });
     setIsCreating(false);
 
     const sheetsUrl = getStoredSheetsUrl();
@@ -547,7 +603,22 @@ export default function App() {
   const handleDeleteCausa = (id) => {
     const causaToDelete = causas.find(c => c.id === id);
     if (window.confirm('¿Está seguro de eliminar esta causa del sistema?')) {
-      setCausas(prev => prev.filter(c => c.id !== id));
+      if (causaToDelete) {
+        const idKey = String(causaToDelete.id || '').trim().toLowerCase();
+        const ippKey = String(causaToDelete.ipp || '').trim().toLowerCase();
+        const now = Date.now();
+        if (idKey) recentEditsRef.current[`deleted_${idKey}`] = now;
+        if (ippKey) recentEditsRef.current[`deleted_${ippKey}`] = now;
+      }
+
+      setCausas(prev => {
+        const nextList = prev.filter(c => c.id !== id);
+        if (currentUser) {
+          const currentKey = getUserStorageKey(currentUser);
+          localStorage.setItem(currentKey, JSON.stringify(nextList));
+        }
+        return nextList;
+      });
       if (selectedCausa?.id === id) setSelectedCausa(null);
 
       const sheetsUrl = getStoredSheetsUrl();
