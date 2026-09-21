@@ -31,19 +31,17 @@ textarea.no-uppercase {
   text-transform: none !important;
 }
 
-/* Custom Scrollbar (Always visible & easy to grab) */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
   height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: #090d16;
-  border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb {
   background: #3b82f6;
-  border-radius: 6px;
-  border: 2px solid #090d16;
+  border-radius: 5px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #60a5fa;

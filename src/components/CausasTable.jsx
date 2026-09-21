@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Eye, Edit3, Trash2, Clock, AlertTriangle, CheckCircle2, Gavel, ShieldOff, Scale, MapPin, Send, Archive, Activity, RotateCcw, UserX, Calendar, Unlock, FileText, UserCheck, Check, X } from 'lucide-react';
 
 export const INICIO_OPTIONS = [
@@ -1139,6 +1139,63 @@ export function renderBadgeEstado(estado, tramite = '', causa = null) {
 export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDeleteCausa, onReabrirCausa, onSaveCausa }) {
   const safeCausas = Array.isArray(causas) ? causas : [];
 
+  const tableContainerRef = useRef(null);
+  const stickyScrollbarRef = useRef(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState(0);
+  const [showStickyScrollbar, setShowStickyScrollbar] = useState(false);
+
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (tableContainerRef.current) {
+        const sw = tableContainerRef.current.scrollWidth;
+        const cw = tableContainerRef.current.clientWidth;
+        setTableScrollWidth(sw);
+        setShowStickyScrollbar(sw > cw + 5);
+      }
+    };
+
+    updateDimensions();
+    const timer = setTimeout(updateDimensions, 100);
+
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    if (tableContainerRef.current) {
+      resizeObserver.observe(tableContainerRef.current);
+    }
+    window.addEventListener('resize', updateDimensions);
+
+    return () => {
+      clearTimeout(timer);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateDimensions);
+    };
+  }, [safeCausas]);
+
+  // Synchronize scrolling between main table container and sticky bottom scrollbar
+  const isSyncingTable = useRef(false);
+  const isSyncingSticky = useRef(false);
+
+  const handleTableScroll = () => {
+    if (isSyncingTable.current) {
+      isSyncingTable.current = false;
+      return;
+    }
+    if (tableContainerRef.current && stickyScrollbarRef.current) {
+      isSyncingSticky.current = true;
+      stickyScrollbarRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
+    }
+  };
+
+  const handleStickyScroll = () => {
+    if (isSyncingSticky.current) {
+      isSyncingSticky.current = false;
+      return;
+    }
+    if (tableContainerRef.current && stickyScrollbarRef.current) {
+      isSyncingTable.current = true;
+      tableContainerRef.current.scrollLeft = stickyScrollbarRef.current.scrollLeft;
+    }
+  };
+
   if (safeCausas.length === 0) {
     return (
       <div className="glass-panel flex flex-col items-center justify-center rounded-xl p-12 text-center border border-slate-800">
@@ -1152,22 +1209,27 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
   }
 
   return (
-    <div className="glass-panel overflow-hidden rounded-xl border border-slate-800 shadow-xl">
-      <div className="overflow-auto max-h-[calc(100vh-270px)] min-h-[350px]">
-        <table className="w-full text-left text-xs">
-          <thead className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800 shadow-sm">
+    <div className="glass-panel rounded-xl border border-slate-800 shadow-xl relative flex flex-col">
+      {/* Table Container with native horizontal scroll */}
+      <div
+        ref={tableContainerRef}
+        onScroll={handleTableScroll}
+        className="overflow-x-auto rounded-t-xl"
+      >
+        <table className="w-full text-left text-xs border-collapse min-w-[1200px]">
+          <thead className="bg-slate-900/95 text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0 z-20 backdrop-blur-md shadow-sm">
             <tr>
-              <th className="px-4 py-3.5 text-left">I.P.P.</th>
-              <th className="px-4 py-3.5 text-left">Revisión</th>
-              <th className="px-4 py-3.5 text-left">Carátula</th>
-              <th className="px-4 py-3.5 text-left">Último Trámite / Actuación</th>
-              <th className="px-4 py-3.5 text-left">Pericias</th>
-              <th className="px-2 py-3.5 text-center w-16">Detenido</th>
-              <th className="px-4 py-3.5 text-left">Venc. PP</th>
-              <th className="px-4 py-3.5 text-left">Venc. IPP</th>
-              <th className="px-4 py-3.5 text-left">Denuncia</th>
-              <th className="px-4 py-3.5 text-center">Sumario</th>
-              <th className="px-4 py-3.5 text-right">Acciones</th>
+              <th className="px-4 py-3.5 text-left bg-slate-900/95">I.P.P.</th>
+              <th className="px-4 py-3.5 text-left bg-slate-900/95">Revisión</th>
+              <th className="px-4 py-3.5 text-left bg-slate-900/95">Carátula</th>
+              <th className="px-4 py-3.5 text-left bg-slate-900/95">Último Trámite / Actuación</th>
+              <th className="px-4 py-3.5 text-left bg-slate-900/95">Pericias</th>
+              <th className="px-2 py-3.5 text-center w-16 bg-slate-900/95">Detenido</th>
+              <th className="px-4 py-3.5 text-left bg-slate-900/95">Venc. PP</th>
+              <th className="px-4 py-3.5 text-left bg-slate-900/95">Venc. IPP</th>
+              <th className="px-4 py-3.5 text-left bg-slate-900/95">Denuncia</th>
+              <th className="px-4 py-3.5 text-center bg-slate-900/95">Sumario</th>
+              <th className="px-4 py-3.5 text-right bg-slate-900/95">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60 bg-slate-950/40 text-slate-300">
@@ -1354,6 +1416,18 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
           </tbody>
         </table>
       </div>
+
+      {/* Sticky Bottom Horizontal Scrollbar - Always visible at bottom of viewport when table overflows */}
+      {showStickyScrollbar && (
+        <div
+          ref={stickyScrollbarRef}
+          onScroll={handleStickyScroll}
+          className="sticky bottom-0 z-30 w-full overflow-x-auto bg-slate-950/95 border-t border-slate-800/90 backdrop-blur-md rounded-b-xl shadow-2xl flex items-center"
+          style={{ height: '18px' }}
+        >
+          <div style={{ width: `${tableScrollWidth}px`, height: '1px', flexShrink: 0 }} />
+        </div>
+      )}
     </div>
   );
 }
