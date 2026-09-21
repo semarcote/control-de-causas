@@ -1159,15 +1159,15 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
             <tr>
               <th className="px-4 py-3.5 text-left">I.P.P.</th>
               <th className="px-4 py-3.5 text-left">Revisión</th>
-              <th className="px-4 py-3.5 text-left">Sumario</th>
-              <th className="px-4 py-3.5 text-left">Denuncia</th>
-              <th className="px-2 py-3.5 text-left w-16">Detenido</th>
-              <th className="px-4 py-3.5 text-left">Venc. PP</th>
-              <th className="px-4 py-3.5 text-left">Venc. IPP</th>
-              <th className="px-4 py-3.5 text-left">Pericias</th>
               <th className="px-4 py-3.5 text-left">Carátula</th>
               <th className="px-4 py-3.5 text-left">Último Trámite / Actuación</th>
-              <th className="px-4 py-3.5 text-left">Acciones</th>
+              <th className="px-4 py-3.5 text-left">Pericias</th>
+              <th className="px-2 py-3.5 text-center w-16">Detenido</th>
+              <th className="px-4 py-3.5 text-left">Venc. PP</th>
+              <th className="px-4 py-3.5 text-left">Venc. IPP</th>
+              <th className="px-4 py-3.5 text-left">Denuncia</th>
+              <th className="px-4 py-3.5 text-center">Sumario</th>
+              <th className="px-4 py-3.5 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60 bg-slate-950/40 text-slate-300">
@@ -1207,7 +1207,7 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                   }`}
                   onClick={() => onSelectCausa(causa)}
                 >
-                  {/* IPP */}
+                  {/* 1. IPP */}
                   <td className="px-4 py-3 font-semibold text-white whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <span className={`font-mono text-sm ${
@@ -1238,12 +1238,63 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                     </div>
                   </td>
 
-                  {/* Revisión (Plazo de Control) */}
+                  {/* 2. Revisión (Plazo de Control) */}
                   <td className="px-4 py-3 whitespace-nowrap">
                     {renderBadgeRevisionStatus(causa)}
                   </td>
 
-                  {/* Sumario (Tilde verde o Cruz roja interactiva) */}
+                  {/* 3. Carátula */}
+                  <td className={`px-4 py-3 max-w-xs sm:max-w-md font-medium truncate ${finalized ? 'text-slate-400' : 'text-slate-200'}`}>
+                    <span title={causa.caratula}>
+                      {causa.caratula || 'Sin carátula especificada'}
+                    </span>
+                  </td>
+
+                  {/* 4. Último Trámite */}
+                  <td className="px-4 py-3 max-w-xs sm:max-w-lg text-slate-400 truncate">
+                    <span className={`font-mono text-[11px] ${finalized ? 'text-slate-500' : 'text-slate-300'}`} title={latestTramite}>
+                      {latestTramite}
+                    </span>
+                    {parts.length > 1 && (
+                      <span className="ml-1 text-[10px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded font-sans">
+                        +{parts.length - 1} hitos
+                      </span>
+                    )}
+                  </td>
+
+                  {/* 5. Pericias con alertas de calendario */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {renderMultiplePericiasBadges(causa)}
+                  </td>
+
+                  {/* 6. Detenido */}
+                  <td className="px-2 py-3 whitespace-nowrap text-center w-16">
+                    {causa.detenido === 'SI' || causa.detenido === 'SÍ' ? (
+                      <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-xs font-bold text-rose-400 border border-rose-500/40 glow-urgent">
+                        <UserX className="h-3 w-3 text-rose-400" />
+                        SÍ
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 font-mono text-xs">NO</span>
+                    )}
+                  </td>
+
+                  {/* 7. Vencimiento PP */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {renderBadgePP(causa)}
+                  </td>
+
+                  {/* 8. Vencimiento IPP */}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {renderBadgeIPP(causa.vencimiento_ipp, causa)}
+                  </td>
+
+                  {/* 9. Denuncia / Inicio */}
+                  <td className="px-4 py-3 whitespace-nowrap text-slate-300 font-medium">
+                    {renderBadgeDenuncia(causa.denunciado_en)}
+                  </td>
+
+                  {/* 10. Sumario */}
                   <td className="px-4 py-3 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
@@ -1273,58 +1324,7 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                     </button>
                   </td>
 
-                  {/* Denuncia / Inicio (Badge estilizado) */}
-                  <td className="px-4 py-3 whitespace-nowrap text-slate-300 font-medium">
-                    {renderBadgeDenuncia(causa.denunciado_en)}
-                  </td>
-
-                  {/* Detenido */}
-                  <td className="px-2 py-3 whitespace-nowrap text-center w-16">
-                    {causa.detenido === 'SI' || causa.detenido === 'SÍ' ? (
-                      <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-2 py-0.5 text-xs font-bold text-rose-400 border border-rose-500/40 glow-urgent">
-                        <UserX className="h-3 w-3 text-rose-400" />
-                        SÍ
-                      </span>
-                    ) : (
-                      <span className="text-slate-500 font-mono text-xs">NO</span>
-                    )}
-                  </td>
-
-                  {/* Vencimiento PP (1º en amarillo, 2º en rojo) */}
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {renderBadgePP(causa)}
-                  </td>
-
-                  {/* Vencimiento IPP */}
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {renderBadgeIPP(causa.vencimiento_ipp, causa)}
-                  </td>
-
-                  {/* Pericias con alertas de calendario */}
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {renderMultiplePericiasBadges(causa)}
-                  </td>
-
-                  {/* Carátula */}
-                  <td className={`px-4 py-3 max-w-xs sm:max-w-md font-medium truncate ${finalized ? 'text-slate-400' : 'text-slate-200'}`}>
-                    <span title={causa.caratula}>
-                      {causa.caratula || 'Sin carátula especificada'}
-                    </span>
-                  </td>
-
-                  {/* Último Trámite */}
-                  <td className="px-4 py-3 max-w-xs sm:max-w-lg text-slate-400 truncate">
-                    <span className={`font-mono text-[11px] ${finalized ? 'text-slate-500' : 'text-slate-300'}`} title={latestTramite}>
-                      {latestTramite}
-                    </span>
-                    {parts.length > 1 && (
-                      <span className="ml-1 text-[10px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded font-sans">
-                        +{parts.length - 1} hitos
-                      </span>
-                    )}
-                  </td>
-
-                  {/* Acciones */}
+                  {/* 11. Acciones */}
                   <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1.5">
                       {finalized && (
@@ -1337,8 +1337,6 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                           Reabrir
                         </button>
                       )}
-
-                      {/* Acciones reducidas: Reabrir (si archivada) y Eliminar */}
 
                       <button
                         onClick={() => onDeleteCausa(causa.id)}
