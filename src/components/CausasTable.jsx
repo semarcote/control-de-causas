@@ -1246,7 +1246,16 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
               const isIPPEnTramite = hasIPP && !finalized;
               const hasSumario = causaHasSumario(causa);
 
-              const parts = causa.tramite ? causa.tramite.split('///').map(p => p.trim()).filter(Boolean) : [];
+              const parts = causa.tramite
+                ? causa.tramite.split('///').map(p => p.trim()).filter(p => {
+                    if (!p) return false;
+                    const lower = p.toLowerCase();
+                    if (lower.includes('actualización de expediente') || lower.includes('actualizacion de expediente')) return false;
+                    if (lower.includes('modificación de expediente') || lower.includes('modificacion de expediente')) return false;
+                    if (lower.includes('registro de pericia') || lower.includes('pericia agregada') || lower.includes('pericia marcada') || lower.includes('pericia procesal') || lower.includes('pericia ')) return false;
+                    return true;
+                  })
+                : [];
               const latestTramite = parts.length > 0 ? parts[parts.length - 1] : causa.tramite || 'Sin trámites registrados';
 
               return (

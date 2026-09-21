@@ -189,6 +189,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
         const lower = item.toLowerCase();
         if (lower.includes('actualización de expediente') || lower.includes('actualizacion de expediente')) return false;
         if (lower.includes('modificación de expediente') || lower.includes('modificacion de expediente')) return false;
+        if (lower.includes('registro de pericia') || lower.includes('pericia agregada') || lower.includes('pericia marcada') || lower.includes('pericia procesal') || lower.includes('pericia ')) return false;
         return true;
       })
     : [];
@@ -223,17 +224,10 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
     const updatedPericias = [...periciasState, newItem];
     setPericiasState(updatedPericias);
 
-    // Auto-generate movement timeline entry
     const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-    const periciaEntry = `${todayStr} Registro de Pericia procesal: ${tipoText} (Fecha fijada: ${fechaText})`;
-
-    const updatedTramite = causa.tramite
-      ? `${causa.tramite} /// ${periciaEntry}`
-      : periciaEntry;
 
     const updatedCausa = {
       ...formData,
-      tramite: updatedTramite,
       pericias: updatedPericias,
       revisado: todayStr,
       revisar_dias: newPlazoDias
@@ -248,7 +242,6 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
 
   const handleSavePericiasAndClose = () => {
     let finalPericias = [...periciasState];
-    let updatedTramite = formData.tramite || causa.tramite || '';
 
     // Only process un-added inputs if user typed something in newPericiaTipo or newPericiaFecha AND didn't click + Agregar Pericia
     if (newPericiaTipo.trim() || newPericiaFecha.trim()) {
@@ -271,12 +264,6 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
         };
 
         finalPericias.push(newItem);
-
-        const todayStrShort = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-        const periciaEntry = `${todayStrShort} Registro de Pericia procesal: ${tipoText} (Fecha fijada: ${fechaText})`;
-        if (!updatedTramite.includes(periciaEntry)) {
-          updatedTramite = updatedTramite ? `${updatedTramite} /// ${periciaEntry}` : periciaEntry;
-        }
       }
     }
 
@@ -293,7 +280,6 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
     const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const updatedCausa = {
       ...formData,
-      tramite: updatedTramite,
       pericias: deduplicatedPericias,
       revisado: todayStr
     };
@@ -311,12 +297,10 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
   };
 
   const handleSetPericiaEstado = (idToToggle, targetEstado) => {
-    let periciaName = '';
     let appliedEstado = '';
 
     const updatedPericias = periciasState.map(p => {
       if (p.id === idToToggle) {
-        periciaName = `${p.tipo} (${p.fecha})`;
         const currentIsAgregada = p.finalizada || p.estado === 'agregada' || p.estado === 'cumplida';
         const currentIsEnProceso = p.estado === 'en_proceso' || p.estado === 'en proceso';
 
@@ -339,24 +323,11 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
 
     setPericiasState(updatedPericias);
 
-    // Generate timeline entry
     const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-    let label = 'pendiente';
-    if (appliedEstado === 'agregada') label = 'agregada al expediente';
-    else if (appliedEstado === 'en_proceso') label = 'marcada en proceso';
-    else label = 'reabierta / pendiente';
-
-    const timelineEntry = `${todayStr} Pericia ${label}: ${periciaName}`;
-
-    const updatedTramite = causa.tramite
-      ? `${causa.tramite} /// ${timelineEntry}`
-      : timelineEntry;
-
     const activeP = (updatedPericias || []).find(p => !p.finalizada && p.estado !== 'agregada') || (updatedPericias || [])[0];
 
     const updatedCausa = {
       ...formData,
-      tramite: updatedTramite,
       pericias: updatedPericias,
       pericia_fecha: activeP ? activeP.fecha : (formData.pericia_fecha || ''),
       pericia_detalle: activeP ? activeP.tipo : (formData.pericia_detalle || ''),
