@@ -535,22 +535,31 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
       }
     }
 
-    // Validate that PP date is NOT in the past (ONLY if Detenido = SI)
-    if (isDetenido && !specialStatus && vencPP1State && isDateInPast(vencPP1State)) {
-      alert(`La fecha de vencimiento de la Prisión Preventiva (${vencPP1State}) no puede ser anterior a la fecha de hoy (${todayStr}). Por favor ingrese una fecha futura o seleccione una opción de estado (Presentada / Excarcelado / Libertad).`);
-      return;
-    }
-
     const calculatedPP2 = (vencPP1State && !specialStatus) ? calculatePP2Date(vencPP1State) : '';
+    const activePP2 = vencPP2State || calculatedPP2;
+    const isProrrogada = ppProrrogadaState === true || ppProrrogadaState === 'SI';
 
-    // Validate that PP date does NOT exceed maximum 30 days limit from detention date (ONLY if Detenido = SI)
-    if (isDetenido && !specialStatus && vencPP1State && fechaDetencionState) {
-      if (isPPMaxDaysExceeded(vencPP1State, fechaDetencionState)) {
-        alert(`La fecha del 1º vencimiento de la Prisión Preventiva (${vencPP1State}) supera el límite máximo legal de 30 días respecto a la fecha de detención.`);
-        return;
+    if (isDetenido && !specialStatus) {
+      if (isProrrogada) {
+        if (activePP2 && isDateInPast(activePP2)) {
+          alert(`La fecha del 2º plazo de Prisión Preventiva (${activePP2}) ya se encuentra vencida. Por favor verifique las fechas o seleccione un estado (Presentada / Excarcelado / Libertad).`);
+          return;
+        }
+      } else {
+        if (vencPP1State && isDateInPast(vencPP1State)) {
+          if (activePP2 && !isDateInPast(activePP2)) {
+            alert(`El 1º plazo de Prisión Preventiva (${vencPP1State}) ya venció. Active la casilla "Prorrogar PP (2º Plazo)" para utilizar el 2º plazo (${activePP2}) y guardar correctamente.`);
+            return;
+          } else {
+            alert(`La fecha del 1º vencimiento de la Prisión Preventiva (${vencPP1State}) ya se encuentra vencida. Por favor ingrese una fecha válida o seleccione una opción de estado (Presentada / Excarcelado / Libertad).`);
+            return;
+          }
+        }
       }
-      if (ppProrrogadaState && calculatedPP2 && isPPMaxDaysExceeded(calculatedPP2, fechaDetencionState)) {
-        alert(`La fecha prorrogada del 2º vencimiento de la Prisión Preventiva (${calculatedPP2}) supera el límite máximo legal de 30 días respecto a la fecha de detención.`);
+
+      const activeVenc = isProrrogada ? activePP2 : vencPP1State;
+      if (activeVenc && fechaDetencionState && isPPMaxDaysExceeded(activeVenc, fechaDetencionState)) {
+        alert(`La fecha de vencimiento de la Prisión Preventiva (${activeVenc}) supera el límite máximo legal de 30 días respecto a la fecha de detención.`);
         return;
       }
     }
@@ -1874,16 +1883,23 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                             value={vencPP1State}
                             onChange={(e) => setVencPP1State(formatDateMask(e.target.value))}
                             className={`w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border focus:outline-none ${
-                              isDateInPast(vencPP1State)
+                              isDateInPast(vencPP1State) && (!ppProrrogadaState || isDateInPast(calculatedPP2))
                                 ? 'border-rose-500 text-rose-300'
                                 : 'border-amber-500/40 focus:border-amber-400'
                             }`}
                           />
                           {isDateInPast(vencPP1State) ? (
-                            <p className="mt-1 text-[10px] text-rose-400 font-bold flex items-center gap-1">
-                              <AlertTriangle className="h-3 w-3 shrink-0" />
-                              No puede ser anterior al día de hoy
-                            </p>
+                            ppProrrogadaState && !isDateInPast(calculatedPP2) ? (
+                              <p className="mt-1 text-[10px] text-amber-400 font-bold flex items-center gap-1">
+                                <Clock className="h-3 w-3 shrink-0 text-amber-400" />
+                                1º Plazo vencido — 2º Plazo activo ({calculatedPP2 || 'Válido'})
+                              </p>
+                            ) : (
+                              <p className="mt-1 text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3 shrink-0" />
+                                1º Plazo vencido. Active "Prorrogar PP" para usar 2º Plazo.
+                              </p>
+                            )
                           ) : (
                             <p className="mt-1 text-[10px] text-slate-500">
                               2º Plazo = +15 días corridos

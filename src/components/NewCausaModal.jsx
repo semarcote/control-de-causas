@@ -75,14 +75,31 @@ export default function NewCausaModal({ onClose, onCreate }) {
     }
 
     const specialStatus = checkPPStatusSpecial(formData.vencimiento_pp1);
-    if (!specialStatus && formData.vencimiento_pp1 && isDateInPast(formData.vencimiento_pp1)) {
-      alert(`La fecha de vencimiento de la Prisión Preventiva (${formData.vencimiento_pp1}) no puede ser anterior al día de hoy (${todayStr}).`);
-      return;
-    }
+    const isProrrogada = formData.pp_prorrogada === true || formData.pp_prorrogada === 'SI';
+    const vPP1 = formData.vencimiento_pp1;
+    const vPP2 = formData.vencimiento_pp2 || (vPP1 ? calculatePP2Date(vPP1) : '');
 
-    if (!specialStatus && formData.vencimiento_pp1 && formData.fecha_detencion) {
-      if (isPPMaxDaysExceeded(formData.vencimiento_pp1, formData.fecha_detencion)) {
-        alert(`La fecha de vencimiento de la Prisión Preventiva (${formData.vencimiento_pp1}) supera el límite máximo legal de 30 días respecto a la fecha de detención.`);
+    if (formData.detenido === 'SI' && !specialStatus) {
+      if (isProrrogada) {
+        if (vPP2 && isDateInPast(vPP2)) {
+          alert(`La fecha del 2º plazo de Prisión Preventiva (${vPP2}) ya se encuentra vencida. Por favor verifique las fechas o seleccione un estado (Presentada / Excarcelado / Libertad).`);
+          return;
+        }
+      } else {
+        if (vPP1 && isDateInPast(vPP1)) {
+          if (vPP2 && !isDateInPast(vPP2)) {
+            alert(`El 1º plazo de Prisión Preventiva (${vPP1}) ya venció. Como la causa se encuentra dentro del 2º plazo (${vPP2}), marque la casilla "Prorrogar PP (2º Plazo)" para guardar correctamente.`);
+            return;
+          } else {
+            alert(`La fecha del 1º vencimiento de la Prisión Preventiva (${vPP1}) ya se encuentra vencida. Por favor verifique las fechas o marque un estado (Presentada / Excarcelado / Libertad).`);
+            return;
+          }
+        }
+      }
+
+      const activeVenc = isProrrogada ? vPP2 : vPP1;
+      if (activeVenc && formData.fecha_detencion && isPPMaxDaysExceeded(activeVenc, formData.fecha_detencion)) {
+        alert(`La fecha de vencimiento de la Prisión Preventiva (${activeVenc}) supera el límite máximo legal de 30 días respecto a la fecha de detención.`);
         return;
       }
     }
@@ -630,6 +647,40 @@ export default function NewCausaModal({ onClose, onCreate }) {
                   </div>
                 </div>
               </div>
+
+              {/* Opciones de 2º Plazo / Prórroga de PP */}
+              {!checkPPStatusSpecial(formData.vencimiento_pp1) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-500/20">
+                  <div>
+                    <label className="block font-semibold text-slate-300 mb-1">¿Prorrogar PP? (2º Plazo)</label>
+                    <label className="flex items-center gap-2 cursor-pointer rounded-xl bg-slate-950 p-2.5 border border-slate-800 hover:border-slate-700 transition">
+                      <input
+                        type="checkbox"
+                        checked={!!formData.pp_prorrogada}
+                        onChange={(e) => setFormData(prev => ({ ...prev, pp_prorrogada: e.target.checked }))}
+                        className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-rose-500 focus:ring-rose-500"
+                      />
+                      <span className={`text-xs font-bold ${formData.pp_prorrogada ? 'text-rose-400' : 'text-slate-400'}`}>
+                        {formData.pp_prorrogada ? 'SÍ (2º Plazo Activo)' : 'NO (1º Plazo)'}
+                      </span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-300 mb-1">2º Vencimiento PP (+15d)</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. 05/06/26"
+                      value={formData.vencimiento_pp2 || (formData.vencimiento_pp1 ? calculatePP2Date(formData.vencimiento_pp1) : '')}
+                      onChange={(e) => {
+                        const val = formatDateMask(e.target.value);
+                        setFormData(prev => ({ ...prev, vencimiento_pp2: val }));
+                      }}
+                      className="w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border border-slate-800 focus:border-rose-400 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
