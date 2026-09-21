@@ -1222,7 +1222,7 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
               <th className="px-4 py-3.5 text-left bg-slate-900/95">I.P.P.</th>
               <th className="px-4 py-3.5 text-left bg-slate-900/95">Revisión</th>
               <th className="px-4 py-3.5 text-left bg-slate-900/95">Carátula</th>
-              <th className="px-4 py-3.5 text-left bg-slate-900/95">Último Trámite / Actuación</th>
+              <th className="px-3 py-3.5 text-left bg-slate-900/95 max-w-[200px]">Último Trámite</th>
               <th className="px-4 py-3.5 text-left bg-slate-900/95">Pericias</th>
               <th className="px-2 py-3.5 text-center w-16 bg-slate-900/95">Detenido</th>
               <th className="px-4 py-3.5 text-left bg-slate-900/95">Venc. PP</th>
@@ -1313,7 +1313,7 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                   </td>
 
                   {/* 4. Último Trámite */}
-                  <td className="px-4 py-3 max-w-xs sm:max-w-lg text-slate-400 truncate">
+                  <td className="px-3 py-3 max-w-[200px] text-slate-400 truncate">
                     <span className={`font-mono text-[11px] ${finalized ? 'text-slate-500' : 'text-slate-300'}`} title={latestTramite}>
                       {latestTramite}
                     </span>
