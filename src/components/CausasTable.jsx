@@ -1153,9 +1153,9 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
 
   return (
     <div className="glass-panel overflow-hidden rounded-xl border border-slate-800 shadow-xl">
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[calc(100vh-270px)] min-h-[350px]">
         <table className="w-full text-left text-xs">
-          <thead className="bg-slate-900/90 text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+          <thead className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800 shadow-sm">
             <tr>
               <th className="px-4 py-3.5 text-left">I.P.P.</th>
               <th className="px-4 py-3.5 text-left">Revisión</th>

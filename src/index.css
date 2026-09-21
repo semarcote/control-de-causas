@@ -31,20 +31,22 @@ textarea.no-uppercase {
   text-transform: none !important;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar (Always visible & easy to grab) */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #090d16;
+  border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 4px;
+  background: #3b82f6;
+  border-radius: 6px;
+  border: 2px solid #090d16;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #60a5fa;
 }
 
 /* Glassmorphism utils */
