@@ -39,6 +39,12 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
   const initialSpecialPP = checkPPStatusSpecial(rawPP1);
   const [vencPP1State, setVencPP1State] = useState(initialSpecialPP || formatDisplayDate(rawPP1) || '');
   const [ppProrrogadaState, setPpProrrogadaState] = useState(causa.pp_prorrogada === true || causa.pp_prorrogada === 'SI');
+  const rawPP2 = causa.vencimiento_pp2 || (rawPP1 && !initialSpecialPP ? calculatePP2Date(rawPP1) : '');
+  const [vencPP2State, setVencPP2State] = useState(formatDisplayDate(rawPP2) || '');
+
+  const specialStatus = checkPPStatusSpecial(vencPP1State);
+  const calculatedPP2 = (vencPP1State && !specialStatus) ? calculatePP2Date(vencPP1State) : '';
+  const activePP2 = vencPP2State || calculatedPP2;
   const [vencIPPState, setVencIPPState] = useState(checkPPStatusSpecial(causa.vencimiento_ipp) ? '' : (formatDisplayDate(causa.vencimiento_ipp) || ''));
   const [changeEstadoNote, setChangeEstadoNote] = useState('');
   const [customInicio, setCustomInicio] = useState(
@@ -535,8 +541,6 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
       }
     }
 
-    const calculatedPP2 = (vencPP1State && !specialStatus) ? calculatePP2Date(vencPP1State) : '';
-    const activePP2 = vencPP2State || calculatedPP2;
     const isProrrogada = ppProrrogadaState === true || ppProrrogadaState === 'SI';
 
     if (isDetenido && !specialStatus) {
@@ -585,7 +589,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
     }
 
     const formattedVencPP1 = formatDisplayDate(vencPP1State);
-    const formattedPP2 = formatDisplayDate(calculatedPP2);
+    const formattedPP2 = formatDisplayDate(activePP2);
     const formattedVencIPP = formatDisplayDate(finalVencIPP);
 
     const isIndagado = (indagatoriaState === 'SI' || indagatoriaState === 'SÍ') && !!fechaIndagatoriaState;
@@ -1782,9 +1786,10 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                           onChange={(e) => {
                             const val = formatDateMask(e.target.value);
                             setFechaDetencionState(val);
-                            const { pp1 } = calculatePPDatesFromDetencion(val);
+                            const { pp1, pp2 } = calculatePPDatesFromDetencion(val);
                             if (pp1) {
                               setVencPP1State(pp1);
+                              if (pp2) setVencPP2State(pp2);
                             }
                           }}
                           className={`w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border focus:outline-none ${
@@ -1822,7 +1827,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                         <div className="flex flex-wrap items-center gap-2 pt-1">
                           <button
                             type="button"
-                            onClick={() => { setVencPP1State('Presentada'); setDetenidoState('SI'); }}
+                            onClick={() => { setVencPP1State('Presentada'); setDetenidoState('SI'); setVencPP2State(''); setPpProrrogadaState(false); }}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
                               checkPPStatusSpecial(vencPP1State) === 'Presentada'
                                 ? 'bg-blue-600 text-white border-blue-400 ring-2 ring-blue-500/30'
@@ -1835,7 +1840,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
 
                           <button
                             type="button"
-                            onClick={() => { setVencPP1State('Excarcelado'); setDetenidoState('NO'); }}
+                            onClick={() => { setVencPP1State('Excarcelado'); setDetenidoState('NO'); setVencPP2State(''); setPpProrrogadaState(false); }}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
                               checkPPStatusSpecial(vencPP1State) === 'Excarcelado'
                                 ? 'bg-emerald-600 text-white border-emerald-400 ring-2 ring-emerald-500/30'
@@ -1848,7 +1853,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
 
                           <button
                             type="button"
-                            onClick={() => { setVencPP1State('Libertad'); setDetenidoState('NO'); }}
+                            onClick={() => { setVencPP1State('Libertad'); setDetenidoState('NO'); setVencPP2State(''); setPpProrrogadaState(false); }}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
                               checkPPStatusSpecial(vencPP1State) === 'Libertad'
                                 ? 'bg-sky-600 text-white border-sky-400 ring-2 ring-sky-500/30'
@@ -1862,7 +1867,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                           {checkPPStatusSpecial(vencPP1State) && (
                             <button
                               type="button"
-                              onClick={() => setVencPP1State('')}
+                              onClick={() => { setVencPP1State(''); setVencPP2State(''); setPpProrrogadaState(false); }}
                               className="text-xs text-rose-400 hover:underline px-2 py-1 font-medium"
                             >
                               Limpiar Estado (Ingresar Fecha)
@@ -1881,18 +1886,27 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                             type="text"
                             placeholder="Ej. 20/05/26 o 'Presentada'"
                             value={vencPP1State}
-                            onChange={(e) => setVencPP1State(formatDateMask(e.target.value))}
+                            onChange={(e) => {
+                              const val = formatDateMask(e.target.value);
+                              setVencPP1State(val);
+                              const spec = checkPPStatusSpecial(val);
+                              if (!spec && val) {
+                                setVencPP2State(calculatePP2Date(val));
+                              } else {
+                                setVencPP2State('');
+                              }
+                            }}
                             className={`w-full rounded-xl bg-slate-950 p-2.5 text-xs text-white border focus:outline-none ${
-                              isDateInPast(vencPP1State) && (!ppProrrogadaState || isDateInPast(calculatedPP2))
+                              isDateInPast(vencPP1State) && (!ppProrrogadaState || isDateInPast(activePP2))
                                 ? 'border-rose-500 text-rose-300'
                                 : 'border-amber-500/40 focus:border-amber-400'
                             }`}
                           />
                           {isDateInPast(vencPP1State) ? (
-                            ppProrrogadaState && !isDateInPast(calculatedPP2) ? (
+                            ppProrrogadaState && !isDateInPast(activePP2) ? (
                               <p className="mt-1 text-[10px] text-amber-400 font-bold flex items-center gap-1">
                                 <Clock className="h-3 w-3 shrink-0 text-amber-400" />
-                                1º Plazo vencido — 2º Plazo activo ({calculatedPP2 || 'Válido'})
+                                1º Plazo vencido — 2º Plazo activo ({activePP2 || 'Válido'})
                               </p>
                             ) : (
                               <p className="mt-1 text-[10px] text-rose-400 font-bold flex items-center gap-1">
@@ -1935,7 +1949,7 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
                             <span className="text-slate-400 text-[11px]">2º Plazo (+15 días corridos):</span>
                             <span className="inline-flex items-center gap-1 font-mono font-bold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/40 glow-urgent">
                               <span className="text-[10px] font-black text-white bg-rose-600 px-1 rounded-sm">2º</span>
-                              {vencPP1State ? formatDisplayDate(calculatePP2Date(vencPP1State)) : 'Sin fecha 1º'}
+                              {vencPP1State ? formatDisplayDate(activePP2) : 'Sin fecha 1º'}
                             </span>
                           </div>
                         ) : (
