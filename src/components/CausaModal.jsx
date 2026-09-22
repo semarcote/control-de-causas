@@ -207,18 +207,21 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
     e.preventDefault();
     if (!newPericiaTipo.trim() && !newPericiaFecha.trim()) return;
 
-    if (newPericiaFecha.trim() && isDateInPast(newPericiaFecha.trim())) {
-      alert(`La fecha de la pericia (${newPericiaFecha.trim()}) es errónea: No puede ser una fecha anterior a la fecha del día de hoy.`);
-      return;
-    }
-
     const tipoText = newPericiaTipo.trim() || 'Pericia Procesal';
     const fechaText = newPericiaFecha.trim() || 'Sin fecha';
+
+    let isPastAndVencida = false;
+    if (fechaText !== 'Sin fecha' && isDateInPast(fechaText)) {
+      const confirmVencida = confirm(`La fecha de la pericia (${fechaText}) es anterior al día de hoy.\n\n¿Desea registrarla como una pericia vencida y colocarla automáticamente "En Proceso"?`);
+      if (!confirmVencida) return;
+      isPastAndVencida = true;
+    }
 
     const newItem = {
       id: `p-${Date.now()}`,
       tipo: tipoText,
-      fecha: fechaText
+      fecha: fechaText,
+      estado: isPastAndVencida ? 'en_proceso' : ''
     };
 
     const updatedPericias = [...periciasState, newItem];
@@ -245,13 +248,15 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
 
     // Only process un-added inputs if user typed something in newPericiaTipo or newPericiaFecha AND didn't click + Agregar Pericia
     if (newPericiaTipo.trim() || newPericiaFecha.trim()) {
-      if (newPericiaFecha.trim() && isDateInPast(newPericiaFecha.trim())) {
-        alert(`La fecha de la pericia (${newPericiaFecha.trim()}) es errónea: No puede ser una fecha anterior a la fecha del día de hoy.`);
-        return;
-      }
-
       const tipoText = newPericiaTipo.trim() || 'Pericia Procesal';
       const fechaText = newPericiaFecha.trim() || 'Sin fecha';
+
+      let isPastAndVencida = false;
+      if (fechaText !== 'Sin fecha' && isDateInPast(fechaText)) {
+        const confirmVencida = confirm(`La fecha de la pericia (${fechaText}) es anterior al día de hoy.\n\n¿Desea registrarla como una pericia vencida y colocarla automáticamente "En Proceso"?`);
+        if (!confirmVencida) return;
+        isPastAndVencida = true;
+      }
 
       // Check if this pericia was ALREADY added by handleAddPericiaItem
       const alreadyExists = finalPericias.some(p => p.tipo === tipoText && p.fecha === fechaText);
@@ -260,7 +265,8 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
         const newItem = {
           id: `p-${Date.now()}`,
           tipo: tipoText,
-          fecha: fechaText
+          fecha: fechaText,
+          estado: isPastAndVencida ? 'en_proceso' : ''
         };
 
         finalPericias.push(newItem);
@@ -364,9 +370,12 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
   };
 
   const handleSaveEditPericia = (idToEdit) => {
-    if (editingPericiaFecha.trim() && isDateInPast(editingPericiaFecha.trim())) {
-      alert(`La fecha de la pericia (${editingPericiaFecha.trim()}) es errónea: No puede ser una fecha anterior a la fecha del día de hoy.`);
-      return;
+    const editFecha = editingPericiaFecha.trim();
+    let isPastAndVencida = false;
+    if (editFecha && isDateInPast(editFecha)) {
+      const confirmVencida = confirm(`La fecha de la pericia (${editFecha}) es anterior al día de hoy.\n\n¿Desea registrarla como una pericia vencida y colocarla automáticamente "En Proceso"?`);
+      if (!confirmVencida) return;
+      isPastAndVencida = true;
     }
 
     const updatedPericias = periciasState.map(p => {
@@ -374,7 +383,8 @@ export default function CausaModal({ causa, causas = [], onClose, onSave }) {
         return {
           ...p,
           tipo: editingPericiaTipo.trim() || 'Pericia Procesal',
-          fecha: editingPericiaFecha.trim()
+          fecha: editFecha,
+          estado: isPastAndVencida ? 'en_proceso' : p.estado
         };
       }
       return p;
