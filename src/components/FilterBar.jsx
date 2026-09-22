@@ -23,7 +23,7 @@ export default function FilterBar({
   totalResults,
   onClearFilters
 }) {
-  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'todos' || sumarioFilter !== 'todos' || vencimientoTypeFilter !== 'todos' || (inicioFilter && inicioFilter !== 'todos') || fechaDesdeFilter !== '';
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'en trámite' || sumarioFilter !== 'todos' || vencimientoTypeFilter !== 'todos' || (inicioFilter && inicioFilter !== 'todos') || fechaDesdeFilter !== '';
 
   const statusChips = [
     { id: 'en trámite', label: 'En Trámite' },
@@ -36,8 +36,7 @@ export default function FilterBar({
     { id: 'elevada a juicio', label: 'Elevadas a Juicio' },
     { id: 'sobreseimiento', label: 'Sobreseimientos' },
     { id: 'paradero', label: 'Paradero' },
-    { id: 'captura', label: 'Captura' },
-    { id: 'todos', label: 'Todas' }
+    { id: 'captura', label: 'Captura' }
   ];
 
   return (

@@ -109,7 +109,7 @@ export default function Header({
           }`}
         >
           <Files className="h-4 w-4" />
-          <span>Listado de Causas</span>
+          <span>Causas en Trámite</span>
           <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
             activePage === 'causas' ? 'bg-blue-700 text-white' : 'bg-slate-800 text-slate-400'
           }`}>

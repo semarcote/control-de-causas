@@ -371,6 +371,11 @@ export default function App() {
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
+  // Count active causes En Trámite
+  const enTramiteCount = useMemo(() => {
+    return causas.filter(c => !isFinalizedState(c?.estado, c?.tramite)).length;
+  }, [causas]);
+
   // Count aRevisar (only active causes require review)
   const aRevisarCount = useMemo(() => {
     return causas.filter(c => {
@@ -690,7 +695,7 @@ export default function App() {
       
       {/* Header with Page Navigation Bar */}
       <Header
-        totalCausas={causas.length}
+        totalCausas={enTramiteCount}
         aRevisarCount={aRevisarCount}
         urgentVencimientosCount={urgentVencimientosCount}
         audienciasCount={audienciasCount}
