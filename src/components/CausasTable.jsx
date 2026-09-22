@@ -126,16 +126,20 @@ export function causaHasSumario(causa) {
 
 export function isFinalizedState(estado, tramite = '') {
   const st = (estado || '').trim().toLowerCase();
+  
+  if (st === 'paradero' || st.includes('paradero') || st === 'captura' || st.includes('captura')) {
+    return true;
+  }
+
   if (st === 'en trámite' || st === 'en tramite' || st === 'esperar' || st === 'revisar') return false;
+
   return (
-    st === 'archivada' || st === 'archivo' ||
-    st === 'desestimada' ||
-    st === 'sobreseimiento' ||
+    st === 'archivada' || st === 'archivo' || st.includes('archiv') ||
+    st === 'desestimada' || st.includes('desestim') ||
+    st === 'sobreseimiento' || st.includes('sobrese') ||
     st === 'elevada a juicio' || st.includes('elevada') ||
-    st === 'incompetencia' ||
-    st === 'remisión a otra ufi' || st.includes('remisi') ||
-    st === 'paradero' ||
-    st === 'captura'
+    st === 'incompetencia' || st.includes('incompet') ||
+    st === 'remisión a otra ufi' || st.includes('remisi')
   );
 }
 
