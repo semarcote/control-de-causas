@@ -567,7 +567,7 @@ export function renderBadgePericia(pericia_fecha = '', pericia_detalle = '', fin
     return (
       <span key="badge-agregada" className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-300 border border-emerald-500/40 opacity-90" title={`${pericia_detalle} (Agregada / Cumplida)`}>
         <CheckCircle2 className="h-3 w-3 text-emerald-400 text-xs shrink-0" />
-        {compactDateLabel ? `${compactDateLabel} Agregada` : 'Agregada'}
+        Agregada
         {pericia_detalle && <span className="ml-0.5 text-[10px] text-emerald-200/80 font-normal">({pericia_detalle})</span>}
       </span>
     );
