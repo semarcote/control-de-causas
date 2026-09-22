@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Header from './components/Header';
-import StatsOverview from './components/StatsOverview';
 import FilterBar from './components/FilterBar';
 import CausasTable from './components/CausasTable';
 import CausaModal from './components/CausaModal';
@@ -715,12 +714,6 @@ export default function App() {
         {/* PAGE 1: LISTADO DE CAUSAS */}
         {activePage === 'causas' && (
           <>
-            <StatsOverview
-              causas={causas}
-              selectedFilter={statusFilter}
-              onSelectFilter={setStatusFilter}
-            />
-
             <FilterBar
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
