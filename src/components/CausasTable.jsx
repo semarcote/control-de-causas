@@ -1223,7 +1223,7 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
         <table className="w-full text-left text-xs border-collapse min-w-[1200px]">
           <thead className="bg-slate-900/95 text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0 z-20 backdrop-blur-md shadow-sm">
             <tr>
-              <th className="px-4 py-3.5 text-left bg-slate-900/95">I.P.P.</th>
+              <th className="px-4 py-3.5 text-left bg-slate-900 sticky top-0 left-0 z-30 border-r border-slate-800 shadow-md">I.P.P.</th>
               <th className="px-4 py-3.5 text-left bg-slate-900/95">Revisión</th>
               <th className="px-4 py-3.5 text-left bg-slate-900/95">Carátula</th>
               <th className="px-3 py-3.5 text-left bg-slate-900/95 min-w-[220px] max-w-[300px]">Último Trámite</th>
@@ -1262,6 +1262,20 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                 : [];
               const latestTramite = parts.length > 0 ? parts[parts.length - 1] : causa.tramite || 'Sin trámites registrados';
 
+              const rowCellBgClass = finalized
+                ? 'bg-[#090d16] group-hover:bg-[#0f172a]'
+                : isAbusoEnTramite && isDetenidoEnTramite
+                ? 'bg-[#062c1d] group-hover:bg-[#093d29]'
+                : isAbusoEnTramite
+                ? 'bg-[#310c18] group-hover:bg-[#431222]'
+                : isDetenidoEnTramite
+                ? 'bg-[#062c1d] group-hover:bg-[#093d29]'
+                : isIPPEnTramite
+                ? 'bg-[#321a07] group-hover:bg-[#44240a]'
+                : isCiudadanaEnTramite
+                ? 'bg-[#062a34] group-hover:bg-[#093a48]'
+                : 'bg-[#0b0f19] group-hover:bg-[#1e293b]';
+
               return (
                 <tr
                   key={causa.id}
@@ -1282,8 +1296,8 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                   }`}
                   onClick={() => onSelectCausa(causa)}
                 >
-                  {/* 1. IPP */}
-                  <td className="px-4 py-3 font-semibold text-white whitespace-nowrap">
+                  {/* 1. IPP (Sticky column on horizontal scroll) */}
+                  <td className={`px-4 py-3 font-semibold text-white whitespace-nowrap sticky left-0 z-10 ${rowCellBgClass} border-r border-slate-800/80 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]`}>
                     <div className="flex items-center gap-2">
                       <span className={`font-mono text-sm ${
                         finalized 
