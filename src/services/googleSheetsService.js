@@ -23,7 +23,8 @@ const HEADERS = [
   'id', 'ipp', 'estado', 'revision', 'revisado', 'revisar_dias', 'caratula', 
   'sumario', 'denunciado_en', 'fecha_inicio', 'tramite', 'detenido', 'fecha_detencion',
   'vencimiento_pp1', 'vencimiento_pp2', 'vencimiento_ipp', 'pp_prorrogada', 'pericias', 'audiencias',
-  'indagatoria', 'fecha_indagatoria', 'ipp_prorrogas', 'flagrancia', 'fecha_flagrancia', 'flagrancia_prorrogada'
+  'indagatoria', 'fecha_indagatoria', 'ipp_prorrogas', 'flagrancia', 'fecha_flagrancia', 'flagrancia_prorrogada',
+  'usuario_nombre', 'usuario_id'
 ];
 
 function deleteUnusedDefaultSheets(ss) {
@@ -100,6 +101,8 @@ function cleanAndMigrateSheetHeaders(sheet) {
         const flagranciaVal = getOld('flagrancia') ?? 'NO';
         const fFlagranciaVal = getOld('fecha_flagrancia') ?? getOld('fecha flagrancia') ?? '';
         const flagranciaProrrVal = getOld('flagrancia_prorrogada') ?? getOld('flagrancia prorrogada') ?? '';
+        const usrNombreVal = getOld('usuario_nombre') ?? getOld('usuario nombre') ?? '';
+        const usrIdVal = getOld('usuario_id') ?? getOld('usuario id') ?? '';
 
         newRows.push([
           getOld('id') ?? String(row[0] || ''),
@@ -126,7 +129,9 @@ function cleanAndMigrateSheetHeaders(sheet) {
           ippProrrogasVal,
           flagranciaVal,
           fFlagranciaVal,
-          String(flagranciaProrrVal).toLowerCase() === 'true' || String(flagranciaProrrVal).toUpperCase() === 'SI' ? 'true' : 'false'
+          String(flagranciaProrrVal).toLowerCase() === 'true' || String(flagranciaProrrVal).toUpperCase() === 'SI' ? 'true' : 'false',
+          usrNombreVal,
+          usrIdVal
         ]);
       }
 
@@ -178,11 +183,12 @@ function getOrCreateSheet(userName) {
   const targetName = (userName || SHEET_NAME).trim().toUpperCase();
   let sheet = ss.getSheetByName(targetName);
 
-  // Check case-insensitively and rename to uppercase if found
+  // Check case-insensitively and fuzzy match tab names
   if (!sheet) {
     const sheets = ss.getSheets();
     for (let i = 0; i < sheets.length; i++) {
-      if (sheets[i].getName().trim().toUpperCase() === targetName) {
+      const sName = sheets[i].getName().trim().toUpperCase();
+      if (sName === targetName || (targetName.length >= 4 && (sName.startsWith(targetName) || targetName.startsWith(sName)))) {
         sheet = sheets[i];
         try {
           sheet.setName(targetName);
@@ -463,6 +469,8 @@ function rowToCausa(row, headersMap) {
   const flagranciaVal = getCol('flagrancia', 22);
   const fechaFlagranciaVal = getVal('fecha_flagrancia') ?? getVal('fecha flagrancia') ?? getCol('fecha_flagrancia', 23);
   const flagranciaProrrogadaVal = getVal('flagrancia_prorrogada') ?? getVal('flagrancia prorrogada') ?? getCol('flagrancia_prorrogada', 24);
+  const usuarioNombreVal = getVal('usuario_nombre') ?? getVal('usuario nombre') ?? getCol('usuario_nombre', 25);
+  const usuarioIdVal = getVal('usuario_id') ?? getVal('usuario id') ?? getCol('usuario_id', 26);
 
   let pericias = [];
   try {
@@ -510,7 +518,9 @@ function rowToCausa(row, headersMap) {
     ipp_prorrogas: ippProrrogas,
     flagrancia: flagranciaVal || 'NO',
     fecha_flagrancia: fechaFlagranciaVal || '',
-    flagrancia_prorrogada: String(flagranciaProrrogadaVal).toLowerCase() === 'true' || flagranciaProrrogadaVal === true || String(flagranciaProrrogadaVal).toUpperCase() === 'SI'
+    flagrancia_prorrogada: String(flagranciaProrrogadaVal).toLowerCase() === 'true' || flagranciaProrrogadaVal === true || String(flagranciaProrrogadaVal).toUpperCase() === 'SI',
+    usuario_nombre: usuarioNombreVal || '',
+    usuario_id: usuarioIdVal || ''
   };
 }
 
@@ -554,7 +564,9 @@ function causaToRow(c) {
     JSON.stringify(c.ipp_prorrogas || []),
     c.flagrancia || 'NO',
     c.fecha_flagrancia || '',
-    c.flagrancia_prorrogada ? 'true' : 'false'
+    c.flagrancia_prorrogada ? 'true' : 'false',
+    c.usuario_nombre || '',
+    c.usuario_id || ''
   ];
 }
 
@@ -574,6 +586,7 @@ function readCausasForUser(userName) {
     }
   }
 
+  const targetName = userName ? String(userName).trim().toUpperCase() : null;
   const causas = [];
   for (let i = 1; i < data.length; i++) {
     const idVal = String(data[i][0] || '').trim().toLowerCase();
@@ -581,7 +594,11 @@ function readCausasForUser(userName) {
     if (idVal === 'id' && ippVal === 'ipp') continue;
 
     if (data[i][0] || data[i][1]) {
-      causas.push(rowToCausa(data[i], headersMap));
+      const causaObj = rowToCausa(data[i], headersMap);
+      if (targetName && !causaObj.usuario_nombre) {
+        causaObj.usuario_nombre = targetName;
+      }
+      causas.push(causaObj);
     }
   }
   return jsonResponse({ status: 'success', causas: causas });
