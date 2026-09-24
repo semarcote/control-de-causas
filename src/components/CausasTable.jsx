@@ -1310,21 +1310,21 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                   }`}
                   onClick={() => onSelectCausa(causa)}
                 >
-                  {/* 1. IPP (Framed Sticky column on horizontal scroll) */}
-                  <td className={`px-3 py-2.5 whitespace-nowrap sticky left-0 z-10 ${rowCellBgClass} ${borderLeftColor} border-r-2 border-r-slate-700/80 shadow-[4px_0_12px_-2px_rgba(0,0,0,0.5)] transition-colors`}>
-                    <div className="inline-flex items-center gap-2 bg-slate-950/70 px-2.5 py-1 rounded-lg border border-slate-700/70 shadow-inner">
-                      <span className={`font-mono text-xs font-bold tracking-wide ${
+                  {/* 1. IPP (Sticky column on horizontal scroll) */}
+                  <td className={`px-4 py-3 whitespace-nowrap sticky left-0 z-10 ${rowCellBgClass} ${borderLeftColor} border-r-2 border-r-slate-700/80 shadow-[4px_0_12px_-2px_rgba(0,0,0,0.5)] transition-colors`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-mono text-sm ${
                         finalized 
                           ? 'text-slate-400 group-hover:text-slate-200' 
                           : isAbusoEnTramite 
-                          ? 'text-rose-300 font-extrabold' 
+                          ? 'text-rose-400 font-extrabold' 
                           : isDetenidoEnTramite
-                          ? 'text-emerald-300 font-extrabold'
+                          ? 'text-emerald-400 font-extrabold'
                           : isIPPEnTramite
                           ? 'text-amber-300 font-extrabold'
                           : isCiudadanaEnTramite
                           ? 'text-cyan-300 font-extrabold'
-                          : 'text-slate-100 font-bold group-hover:text-white'
+                          : 'text-white font-bold group-hover:text-slate-200'
                       }`}>
                         {causa.ipp || 'S/N'}
                       </span>
