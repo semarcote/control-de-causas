@@ -180,7 +180,11 @@ function getOrCreateSheet(userName) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   migrateAllUserSheets(ss);
 
-  const targetName = (userName || SHEET_NAME).trim().toUpperCase();
+  if (!userName || String(userName).trim() === '') {
+    return ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  }
+
+  const targetName = String(userName).trim().toUpperCase();
   let sheet = ss.getSheetByName(targetName);
 
   // Check case-insensitively and fuzzy match tab names
@@ -199,13 +203,7 @@ function getOrCreateSheet(userName) {
   }
 
   if (!sheet) {
-    let oldSheet = ss.getSheetByName('Causas') || ss.getSheetByName('Hoja 1') || ss.getSheetByName('Sheet1');
-    if (oldSheet && (!userName || targetName === SHEET_NAME)) {
-      oldSheet.setName(SHEET_NAME);
-      sheet = oldSheet;
-    } else {
-      sheet = ss.insertSheet(targetName);
-    }
+    sheet = ss.insertSheet(targetName);
   }
 
   cleanAndMigrateSheetHeaders(sheet);
@@ -1064,40 +1062,66 @@ export async function fetchCausasFromSheets(url, userName = null) {
   if (!url) throw new Error('URL de Google Apps Script no configurada');
 
   const targetUserName = userName ? String(userName).trim().toUpperCase() : null;
-  const queryUrl = targetUserName ? `${url}?userName=${encodeURIComponent(targetUserName)}` : url;
+  const isMarcote = !targetUserName || targetUserName.includes('MARCOTE') || targetUserName.includes('SEBASTIAN') || targetUserName.includes('SEBASTIÁN');
+
   let rawList = null;
 
-  // Primero probar método GET
+  // 1. Probamos primero HTTP POST para garantizar que userName viaje dentro del body JSON y no se pierda por redirecciones 302
   try {
-    const res = await fetch(queryUrl);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.status === 'success' && Array.isArray(data.causas)) {
-        rawList = data.causas;
-      }
+    const result = await postToAppsScript(url, { action: 'read', userName: targetUserName });
+    if (result && Array.isArray(result.causas)) {
+      rawList = result.causas;
     }
   } catch (e) {
-    console.warn('GET fetch direct failed, trying POST fallback', e);
+    console.warn('POST fetch read notice for', targetUserName, e);
   }
 
+  // 2. Fallback a método GET si POST falla
   if (rawList === null) {
-    const result = await postToAppsScript(url, { action: 'read', userName: targetUserName });
-    rawList = result.causas || [];
+    try {
+      const queryUrl = targetUserName ? `${url}?userName=${encodeURIComponent(targetUserName)}` : url;
+      const res = await fetch(queryUrl);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success' && Array.isArray(data.causas)) {
+          rawList = data.causas;
+        }
+      }
+    } catch (e) {
+      console.warn('GET fetch fallback notice:', e);
+    }
   }
+
+  if (!Array.isArray(rawList)) rawList = [];
 
   updateLastSyncTime();
 
-  // Filtrar cualquier fila de encabezado duplicada accidentalmente y etiquetar el usuario
-  return rawList
-    .filter(c => {
-      const idVal = String(c.id || '').trim().toLowerCase();
-      const ippVal = String(c.ipp || '').trim().toLowerCase();
-      return idVal !== 'id' && ippVal !== 'ipp';
+  // Filtrar cualquier fila de encabezado duplicada accidentalmente
+  const cleanList = rawList.filter(c => {
+    const idVal = String(c.id || '').trim().toLowerCase();
+    const ippVal = String(c.ipp || '').trim().toLowerCase();
+    return idVal !== 'id' && ippVal !== 'ipp';
+  });
+
+  return cleanList
+    .map(c => {
+      if (c.usuario_nombre) {
+        return c;
+      }
+      if (isMarcote) {
+        return { ...c, usuario_nombre: 'SEBASTIÁN MARCOTE' };
+      } else {
+        return { ...c, usuario_nombre: targetUserName };
+      }
     })
-    .map(c => ({
-      ...c,
-      usuario_nombre: c.usuario_nombre || targetUserName || ''
-    }));
+    .filter(c => {
+      if (!isMarcote && targetUserName) {
+        if (c.usuario_nombre && c.usuario_nombre.toUpperCase() !== targetUserName) {
+          return false;
+        }
+      }
+      return true;
+    });
 }
 
 /**
