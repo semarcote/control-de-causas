@@ -172,6 +172,24 @@ function mergeRemoteAndLocalCausas(remoteList = [], localList = [], localSaveTim
 }
 
 export default function App() {
+  // Theme state (Apple Light Mode by default, toggleable to Dark Mode)
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('control_causas_theme') || 'light';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('control_causas_theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   // Helper to normalize legacy role names
   const normalizeUser = (u) => {
     if (!u) return u;
@@ -775,6 +793,8 @@ export default function App() {
         onExportData={handleExportData}
         onResetData={handleResetData}
         onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* Main Content Area: Page Router */}
