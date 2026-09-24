@@ -1223,7 +1223,7 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
         <table className="w-full text-left text-xs border-collapse min-w-[1200px]">
           <thead className="bg-slate-900/95 text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0 z-20 backdrop-blur-md shadow-sm">
             <tr>
-              <th className="px-4 py-3.5 text-left bg-slate-900 sticky top-0 left-0 z-30 border-r border-slate-800 shadow-md">I.P.P.</th>
+              <th className="px-3.5 py-3.5 text-left bg-[#0f172a] sticky top-0 left-0 z-30 border-r-2 border-r-slate-700/80 border-b border-b-slate-800 shadow-md text-slate-300 font-bold">I.P.P.</th>
               <th className="px-4 py-3.5 text-left bg-slate-900/95">Revisión</th>
               <th className="px-4 py-3.5 text-left bg-slate-900/95">Carátula</th>
               <th className="px-3 py-3.5 text-left bg-slate-900/95 min-w-[220px] max-w-[300px]">Último Trámite</th>
@@ -1262,19 +1262,33 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                 : [];
               const latestTramite = parts.length > 0 ? parts[parts.length - 1] : causa.tramite || 'Sin trámites registrados';
 
-              const rowCellBgClass = finalized
-                ? 'bg-[#090d16] group-hover:bg-[#0f172a]'
+              const borderLeftColor = finalized
+                ? 'border-l-4 border-l-slate-600'
                 : isAbusoEnTramite && isDetenidoEnTramite
-                ? 'bg-[#062c1d] group-hover:bg-[#093d29]'
+                ? 'border-l-4 border-l-rose-500'
                 : isAbusoEnTramite
-                ? 'bg-[#310c18] group-hover:bg-[#431222]'
+                ? 'border-l-4 border-l-rose-500'
                 : isDetenidoEnTramite
-                ? 'bg-[#062c1d] group-hover:bg-[#093d29]'
+                ? 'border-l-4 border-l-emerald-400'
                 : isIPPEnTramite
-                ? 'bg-[#321a07] group-hover:bg-[#44240a]'
+                ? 'border-l-4 border-l-amber-400'
                 : isCiudadanaEnTramite
-                ? 'bg-[#062a34] group-hover:bg-[#093a48]'
-                : 'bg-[#0b0f19] group-hover:bg-[#1e293b]';
+                ? 'border-l-4 border-l-cyan-400'
+                : 'border-l-4 border-l-transparent';
+
+              const rowCellBgClass = finalized
+                ? 'bg-[#0f172a] group-hover:bg-[#1e293b]'
+                : isAbusoEnTramite && isDetenidoEnTramite
+                ? 'bg-[#062c1d] group-hover:bg-[#0c402c]'
+                : isAbusoEnTramite
+                ? 'bg-[#310c18] group-hover:bg-[#461323]'
+                : isDetenidoEnTramite
+                ? 'bg-[#062c1d] group-hover:bg-[#0c402c]'
+                : isIPPEnTramite
+                ? 'bg-[#321a07] group-hover:bg-[#47270b]'
+                : isCiudadanaEnTramite
+                ? 'bg-[#062a34] group-hover:bg-[#0b3c4a]'
+                : 'bg-[#0f172a] group-hover:bg-[#1e293b]';
 
               return (
                 <tr
@@ -1283,34 +1297,34 @@ export default function CausasTable({ causas, onSelectCausa, onEditCausa, onDele
                     finalized
                       ? 'bg-slate-950/80 opacity-60 hover:opacity-100 grayscale-[40%] hover:grayscale-0'
                       : isAbusoEnTramite && isDetenidoEnTramite
-                      ? 'bg-emerald-950/60 border-l-4 border-l-rose-500 hover:bg-emerald-900/70 text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)] ring-1 ring-emerald-500/30'
+                      ? 'bg-emerald-950/60 hover:bg-emerald-900/70 text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)] ring-1 ring-emerald-500/30'
                       : isAbusoEnTramite
-                      ? 'bg-rose-950/40 border-l-4 border-l-rose-500 hover:bg-rose-900/50 text-rose-100 shadow-[0_0_18px_rgba(244,63,94,0.2)]'
+                      ? 'bg-rose-950/40 hover:bg-rose-900/50 text-rose-100 shadow-[0_0_18px_rgba(244,63,94,0.2)]'
                       : isDetenidoEnTramite
-                      ? 'bg-emerald-950/60 border-l-4 border-l-emerald-400 hover:bg-emerald-900/70 text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)] ring-1 ring-emerald-500/30'
+                      ? 'bg-emerald-950/60 hover:bg-emerald-900/70 text-emerald-100 shadow-[0_0_25px_rgba(16,185,129,0.35)] ring-1 ring-emerald-500/30'
                       : isIPPEnTramite
-                      ? 'bg-amber-950/40 border-l-4 border-l-amber-400 hover:bg-amber-900/50 text-amber-100 shadow-[0_0_18px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/20'
+                      ? 'bg-amber-950/40 hover:bg-amber-900/50 text-amber-100 shadow-[0_0_18px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/20'
                       : isCiudadanaEnTramite
-                      ? 'bg-cyan-950/40 border-l-4 border-l-cyan-400 hover:bg-cyan-900/50 text-cyan-100 shadow-[0_0_18px_rgba(6,182,212,0.2)] ring-1 ring-cyan-500/20'
+                      ? 'bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-100 shadow-[0_0_18px_rgba(6,182,212,0.2)] ring-1 ring-cyan-500/20'
                       : 'hover:bg-slate-800/40'
                   }`}
                   onClick={() => onSelectCausa(causa)}
                 >
-                  {/* 1. IPP (Sticky column on horizontal scroll) */}
-                  <td className={`px-4 py-3 font-semibold text-white whitespace-nowrap sticky left-0 z-10 ${rowCellBgClass} border-r border-slate-800/80 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]`}>
-                    <div className="flex items-center gap-2">
-                      <span className={`font-mono text-sm ${
+                  {/* 1. IPP (Framed Sticky column on horizontal scroll) */}
+                  <td className={`px-3 py-2.5 whitespace-nowrap sticky left-0 z-10 ${rowCellBgClass} ${borderLeftColor} border-r-2 border-r-slate-700/80 shadow-[4px_0_12px_-2px_rgba(0,0,0,0.5)] transition-colors`}>
+                    <div className="inline-flex items-center gap-2 bg-slate-950/70 px-2.5 py-1 rounded-lg border border-slate-700/70 shadow-inner">
+                      <span className={`font-mono text-xs font-bold tracking-wide ${
                         finalized 
                           ? 'text-slate-400 group-hover:text-slate-200' 
                           : isAbusoEnTramite 
-                          ? 'text-rose-400 font-extrabold' 
+                          ? 'text-rose-300 font-extrabold' 
                           : isDetenidoEnTramite
-                          ? 'text-emerald-400 font-extrabold'
+                          ? 'text-emerald-300 font-extrabold'
                           : isIPPEnTramite
                           ? 'text-amber-300 font-extrabold'
                           : isCiudadanaEnTramite
                           ? 'text-cyan-300 font-extrabold'
-                          : 'text-white font-bold group-hover:text-slate-200'
+                          : 'text-slate-100 font-bold group-hover:text-white'
                       }`}>
                         {causa.ipp || 'S/N'}
                       </span>
