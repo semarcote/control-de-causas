@@ -176,11 +176,26 @@ export default function App() {
 
   const handleLogin = (user) => {
     const normUser = normalizeUser(user);
+    const targetKey = getUserStorageKey(normUser);
+    const saved = localStorage.getItem(targetKey);
+    let initialLocal = [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          initialLocal = parsed.filter(c => isCausaForUser(c, normUser));
+        }
+      } catch (e) {}
+    }
+    setCausas(initialLocal);
+    setLoadedUserKey(targetKey);
     setCurrentUser(normUser);
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(normUser));
   };
 
   const handleLogout = () => {
+    setCausas([]);
+    setLoadedUserKey('');
     setCurrentUser(null);
     localStorage.removeItem(SESSION_STORAGE_KEY);
   };
@@ -405,30 +420,36 @@ export default function App() {
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
+  // Defensively filter causes for active currentUser at all times to prevent any cross-user flicker
+  const userCausas = useMemo(() => {
+    if (!currentUser) return [];
+    return causas.filter(c => isCausaForUser(c, currentUser));
+  }, [causas, currentUser]);
+
   // Count active causes En Trámite
   const enTramiteCount = useMemo(() => {
-    return causas.filter(c => !isFinalizedState(c?.estado, c?.tramite)).length;
-  }, [causas]);
+    return userCausas.filter(c => !isFinalizedState(c?.estado, c?.tramite)).length;
+  }, [userCausas]);
 
   // Count aRevisar (only active causes require review)
   const aRevisarCount = useMemo(() => {
-    return causas.filter(c => {
+    return userCausas.filter(c => {
       if (isFinalizedState(c.estado, c.tramite)) return false;
       return c.estado?.toLowerCase() === 'revisar';
     }).length;
-  }, [causas]);
+  }, [userCausas]);
 
   // Count causes with IPP and PP Expirations
   const ippCount = useMemo(() => {
-    return causas.filter(c => {
+    return userCausas.filter(c => {
       if (!c || isFinalizedState(c.estado, c.tramite)) return false;
       const ippDate = getVencimientoIPP(c);
       return Boolean(ippDate && !checkPPStatusSpecial(ippDate));
     }).length;
-  }, [causas]);
+  }, [userCausas]);
 
   const ppCount = useMemo(() => {
-    return causas.filter(c => {
+    return userCausas.filter(c => {
       if (!c || isFinalizedState(c.estado, c.tramite)) return false;
       const isDetenido = c.detenido === 'SI' || c.detenido === 'SÍ';
       const rawPPVal = c.estado_pp || c.vencimiento_pp1 || c.vencimiento_pp || '';
@@ -442,18 +463,18 @@ export default function App() {
       }
       return false;
     }).length;
-  }, [causas]);
+  }, [userCausas]);
 
   const periciasCount = useMemo(() => {
-    return causas.filter(c => {
+    return userCausas.filter(c => {
       if (!c || isFinalizedState(c.estado, c.tramite)) return false;
       return hasPericias(c);
     }).length;
-  }, [causas]);
+  }, [userCausas]);
 
   // Filtered & Sorted Dataset
   const filteredCausas = useMemo(() => {
-    return causas.filter(causa => {
+    return userCausas.filter(causa => {
       // 1. Search term match (IPP, Carátula, Trámite)
       if (searchTerm.trim() !== '') {
         const query = searchTerm.toLowerCase().trim();
@@ -712,19 +733,19 @@ export default function App() {
 
   // Count urgent expirations (<= 15 days) using exact expiration events logic
   const urgentVencimientosCount = useMemo(() => {
-    const events = getExpirationEvents(causas);
+    const events = getExpirationEvents(userCausas);
     return events.filter(e => e.days <= 15).length;
-  }, [causas]);
+  }, [userCausas]);
 
   // Count upcoming/pending audiencias
   const audienciasCount = useMemo(() => {
     let count = 0;
-    causas.forEach(c => {
+    userCausas.forEach(c => {
       const auds = Array.isArray(c.audiencias) ? c.audiencias : [];
       count += auds.filter(a => a.estado !== 'Realizada' && a.estado !== 'Suspendida').length;
     });
     return count;
-  }, [causas]);
+  }, [userCausas]);
 
   if (!currentUser) {
     return (
@@ -800,7 +821,7 @@ export default function App() {
         {/* PAGE 2: ALERTAS DE VENCIMIENTO */}
         {activePage === 'vencimientos' && (
           <ExpirationPanel
-            causas={causas}
+            causas={userCausas}
             onSelectCausa={(causa) => setSelectedCausa(causa)}
             userName={currentUser?.name}
           />
@@ -809,7 +830,7 @@ export default function App() {
         {/* PAGE 3: CALENDARIO DE AUDIENCIAS */}
         {activePage === 'audiencias' && (
           <AudienciasPanel
-            causas={causas}
+            causas={userCausas}
             onSelectCausa={(causa) => setSelectedCausa(causa)}
             onSaveCausa={handleSaveCausa}
           />
@@ -836,14 +857,14 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-slate-950/60 py-4 text-center text-xs text-slate-500">
-        Ministerio Público Fiscal - Sistema de Control y Seguimiento Procesal de Causas • {causas.length} expedientes registrados
+        Ministerio Público Fiscal - Sistema de Control y Seguimiento Procesal de Causas • {userCausas.length} expedientes registrados
       </footer>
 
       {/* Modal Detail / Timeline / Edit */}
       {selectedCausa && (
         <CausaModal
           causa={selectedCausa}
-          causas={causas}
+          causas={userCausas}
           onClose={() => setSelectedCausa(null)}
           onSave={handleSaveCausa}
         />
