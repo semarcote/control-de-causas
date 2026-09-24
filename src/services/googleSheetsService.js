@@ -1087,12 +1087,17 @@ export async function fetchCausasFromSheets(url, userName = null) {
 
   updateLastSyncTime();
 
-  // Filtrar cualquier fila de encabezado duplicada accidentalmente
-  return rawList.filter(c => {
-    const idVal = String(c.id || '').trim().toLowerCase();
-    const ippVal = String(c.ipp || '').trim().toLowerCase();
-    return idVal !== 'id' && ippVal !== 'ipp';
-  });
+  // Filtrar cualquier fila de encabezado duplicada accidentalmente y etiquetar el usuario
+  return rawList
+    .filter(c => {
+      const idVal = String(c.id || '').trim().toLowerCase();
+      const ippVal = String(c.ipp || '').trim().toLowerCase();
+      return idVal !== 'id' && ippVal !== 'ipp';
+    })
+    .map(c => ({
+      ...c,
+      usuario_nombre: c.usuario_nombre || targetUserName || ''
+    }));
 }
 
 /**

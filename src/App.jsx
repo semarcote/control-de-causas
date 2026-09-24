@@ -81,22 +81,22 @@ function mergeRemoteAndLocalCausas(remoteList = [], localList = [], localSaveTim
 
   const targetUserName = currentUser ? (currentUser.name || '').trim().toUpperCase() : '';
 
-  // Filter remote items strictly for this user & tag usuario_nombre if missing
-  const taggedRemote = remoteArr
-    .filter(r => isCausaForUser(r, currentUser))
-    .map(r => ({
-      ...r,
-      usuario_nombre: r.usuario_nombre || targetUserName
-    }));
+  // 1. Tag remote items with targetUserName if usuario_nombre is missing (since remoteList comes from currentUser's sheet tab)
+  const taggedRemote = remoteArr.map(r => ({
+    ...r,
+    usuario_nombre: r.usuario_nombre || targetUserName
+  }));
 
   const now = Date.now();
   const RECENT_SAVE_WINDOW_MS = 180000; // 3 minutes grace period for local edits to sync completely
 
   const map = new Map();
 
-  // 1. Add all remote causes fetched from Google Sheets unless recently deleted locally
+  // 2. Add all remote causes fetched from Google Sheets unless recently deleted locally
   taggedRemote.forEach(r => {
     if (r && (r.id || r.ipp)) {
+      if (currentUser && !isCausaForUser(r, currentUser)) return;
+
       const idKey = String(r.id || '').trim().toLowerCase();
       const ippKey = String(r.ipp || '').trim().toLowerCase();
       const key = idKey || ippKey;
