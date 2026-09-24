@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Scale, Plus, Download, RefreshCw, Clock, ShieldAlert, Users, LogOut, Calendar, Files, AlertTriangle, FileSpreadsheet, Mail, Sun, Moon } from 'lucide-react';
+import { Scale, Plus, Download, RefreshCw, Clock, ShieldAlert, Users, LogOut, Calendar, Files, AlertTriangle, FileSpreadsheet, Mail } from 'lucide-react';
 
 export default function Header({
   totalCausas,
@@ -13,9 +13,7 @@ export default function Header({
   onOpenEmailModal,
   onExportData,
   onResetData,
-  onLogout,
-  theme = 'light',
-  onToggleTheme
+  onLogout
 }) {
   const [currentDate, setCurrentDate] = useState('');
 
@@ -55,16 +53,6 @@ export default function Header({
 
         {/* Quick Action Buttons */}
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          {onToggleTheme && (
-            <button
-              onClick={onToggleTheme}
-              className="flex items-center justify-center p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border border-slate-700 transition-all hover:scale-105 active:scale-95 shadow-sm"
-              title={theme === 'dark' ? 'Cambiar a Modo Claro (Apple Light)' : 'Cambiar a Modo Oscuro (Apple Dark)'}
-            >
-              {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-blue-500" />}
-            </button>
-          )}
-
           {onOpenEmailModal && (
             <button
               onClick={onOpenEmailModal}
