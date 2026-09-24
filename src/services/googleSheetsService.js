@@ -176,36 +176,73 @@ function migrateAllUserSheets(ss) {
   } catch (e) {}
 }
 
+function normalizeName(str) {
+  if (!str) return '';
+  return String(str)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+}
+
 function getOrCreateSheet(userName) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   migrateAllUserSheets(ss);
 
-  if (!userName || String(userName).trim() === '') {
-    return ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
-  }
+  const normTarget = userName ? normalizeName(userName) : '';
+  const isMarcote = !normTarget || normTarget.includes('MARCOTE') || normTarget.includes('SEBASTIAN');
 
-  const targetName = String(userName).trim().toUpperCase();
-  let sheet = ss.getSheetByName(targetName);
+  const sheets = ss.getSheets();
 
-  // Check case-insensitively and fuzzy match tab names
-  if (!sheet) {
-    const sheets = ss.getSheets();
+  // 1. Check exact normalized name match across existing non-USUARIOS sheets
+  if (normTarget) {
     for (let i = 0; i < sheets.length; i++) {
-      const sName = sheets[i].getName().trim().toUpperCase();
-      if (sName === targetName || (targetName.length >= 4 && (sName.startsWith(targetName) || targetName.startsWith(sName)))) {
-        sheet = sheets[i];
-        try {
-          sheet.setName(targetName);
-        } catch (e) {}
-        break;
+      const s = sheets[i];
+      const normName = normalizeName(s.getName());
+      if (normName === 'USUARIOS') continue;
+      if (normName === normTarget) {
+        return s;
       }
     }
   }
 
-  if (!sheet) {
-    sheet = ss.insertSheet(targetName);
+  // 2. If user is Marcote, search for legacy sheet names ("SEBASTIÁN MARCOTE", "SEBASTIAN MARCOTE", "CAUSAS", "HOJA 1", "SHEET1") or fallback to first non-USUARIOS tab
+  if (isMarcote) {
+    const legacyNames = ['SEBASTIAN MARCOTE', 'SEBASTIANMARCOTE', 'CAUSAS', 'HOJA 1', 'HOJA1', 'SHEET1', 'SHEET 1'];
+    for (let i = 0; i < sheets.length; i++) {
+      const s = sheets[i];
+      const normName = normalizeName(s.getName());
+      if (normName === 'USUARIOS') continue;
+      for (let j = 0; j < legacyNames.length; j++) {
+        if (normalizeName(legacyNames[j]) === normName) {
+          return s;
+        }
+      }
+    }
+    // Fallback: Return first non-USUARIOS sheet for Marcote so his master causes are never lost
+    for (let i = 0; i < sheets.length; i++) {
+      const s = sheets[i];
+      if (normalizeName(s.getName()) !== 'USUARIOS') {
+        return s;
+      }
+    }
   }
 
+  // 3. For secondary users, check fuzzy match
+  if (normTarget) {
+    for (let i = 0; i < sheets.length; i++) {
+      const s = sheets[i];
+      const normName = normalizeName(s.getName());
+      if (normName === 'USUARIOS') continue;
+      if (normTarget.length >= 4 && (normName.startsWith(normTarget) || normTarget.startsWith(normName))) {
+        return s;
+      }
+    }
+  }
+
+  // 4. Create new sheet tab if none found
+  const newSheetName = isMarcote ? 'SEBASTIÁN MARCOTE' : String(userName).trim().toUpperCase();
+  const sheet = ss.insertSheet(newSheetName);
   cleanAndMigrateSheetHeaders(sheet);
   deleteUnusedDefaultSheets(ss);
 
@@ -1001,6 +1038,15 @@ function ejecutarAlertaDiariaVencimientos() {
 
 export const DEFAULT_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwJ4J7ckbFct7KNEz_L29HZbQdlOCuJXtEmZIkn7aAXXlfC-V0Se7TWNoqzCeCECBY-CA/exec';
 
+export function normalizeName(str) {
+  if (!str) return '';
+  return String(str)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+}
+
 export function getStoredSheetsUrl() {
   return localStorage.getItem(SHEETS_URL_KEY) || DEFAULT_SHEETS_URL;
 }
@@ -1062,7 +1108,8 @@ export async function fetchCausasFromSheets(url, userName = null) {
   if (!url) throw new Error('URL de Google Apps Script no configurada');
 
   const targetUserName = userName ? String(userName).trim().toUpperCase() : null;
-  const isMarcote = !targetUserName || targetUserName.includes('MARCOTE') || targetUserName.includes('SEBASTIAN') || targetUserName.includes('SEBASTIÁN');
+  const normTarget = normalizeName(targetUserName);
+  const isMarcote = !normTarget || normTarget.includes('MARCOTE') || normTarget.includes('SEBASTIAN');
 
   let rawList = null;
 
@@ -1115,9 +1162,12 @@ export async function fetchCausasFromSheets(url, userName = null) {
       }
     })
     .filter(c => {
-      if (!isMarcote && targetUserName) {
-        if (c.usuario_nombre && c.usuario_nombre.toUpperCase() !== targetUserName) {
-          return false;
+      if (!isMarcote && normTarget) {
+        if (c.usuario_nombre) {
+          const normCausaUser = normalizeName(c.usuario_nombre);
+          if (normCausaUser && normCausaUser !== normTarget && !normCausaUser.startsWith(normTarget) && !normTarget.startsWith(normCausaUser)) {
+            return false;
+          }
         }
       }
       return true;

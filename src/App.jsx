@@ -19,7 +19,8 @@ import {
   deleteUserSheetTab,
   saveUserToSheetsTab,
   fetchUsersFromSheetsTab,
-  deleteUserFromSheetsTab
+  deleteUserFromSheetsTab,
+  normalizeName
 } from './services/googleSheetsService';
 
 import { isFinalizedState, causaHasSumario, getCausaIngresoDate, parseAnyDate, isCausaRevisar, isCausaEsperar, getVencimientoIPP, checkPPStatusSpecial, hasPericias } from './components/CausasTable';
@@ -55,24 +56,49 @@ function parseIPP(ippStr) {
 
 function isCausaForUser(causa, user) {
   if (!causa || !user) return true;
-  const targetName = (user.name || '').trim().toUpperCase();
+  const targetName = normalizeName(user.name);
+  if (!targetName) return true;
 
   if (causa.usuario_nombre) {
-    const causaUser = causa.usuario_nombre.trim().toUpperCase();
+    const causaUser = normalizeName(causa.usuario_nombre);
     if (causaUser === targetName) return true;
     if (targetName.length >= 4 && (causaUser.startsWith(targetName) || targetName.startsWith(causaUser))) return true;
     return false;
   }
 
   // Untagged legacy causes belong to Marcote's master sheet
-  const isMarcote = targetName.includes('MARCOTE') || targetName.includes('SEBASTIAN') || targetName.includes('SEBASTIÁN');
+  const isMarcote = targetName.includes('MARCOTE') || targetName.includes('SEBASTIAN');
   return isMarcote;
 }
 
 function getUserStorageKey(user) {
   if (!user) return STORAGE_KEY;
-  const identifier = String(user.name || user.id || 'user').trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+  const norm = normalizeName(user.name || user.id || 'user');
+  const identifier = norm.replace(/[^A-Z0-9]/g, '_');
   return `${STORAGE_KEY}_user_${identifier}`;
+}
+
+function getInitialLocalCausas(user) {
+  if (!user) return [];
+  const targetKey = getUserStorageKey(user);
+  let saved = localStorage.getItem(targetKey);
+
+  const normName = normalizeName(user.name);
+  const isMarcote = normName.includes('MARCOTE') || normName.includes('SEBASTIAN');
+
+  if (!saved && isMarcote) {
+    saved = localStorage.getItem(`${STORAGE_KEY}_user_SEBASTI_N_MARCOTE`) || localStorage.getItem(STORAGE_KEY);
+  }
+
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.filter(c => isCausaForUser(c, user));
+      }
+    } catch (e) {}
+  }
+  return [];
 }
 
 function mergeRemoteAndLocalCausas(remoteList = [], localList = [], localSaveTimestamps = {}, currentUser = null) {
@@ -177,16 +203,7 @@ export default function App() {
   const handleLogin = (user) => {
     const normUser = normalizeUser(user);
     const targetKey = getUserStorageKey(normUser);
-    const saved = localStorage.getItem(targetKey);
-    let initialLocal = [];
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          initialLocal = parsed.filter(c => isCausaForUser(c, normUser));
-        }
-      } catch (e) {}
-    }
+    const initialLocal = getInitialLocalCausas(normUser);
     setCausas(initialLocal);
     setLoadedUserKey(targetKey);
     setCurrentUser(normUser);
@@ -210,7 +227,7 @@ export default function App() {
           setUsers(prevLocalUsers => {
             const mergedUsers = remoteUsers.map(rawR => {
               const r = normalizeUser(rawR);
-              const localMatch = prevLocalUsers.find(l => l.id === r.id || l.name?.toUpperCase() === r.name?.toUpperCase());
+              const localMatch = prevLocalUsers.find(l => l.id === r.id || normalizeName(l.name) === normalizeName(r.name));
               if (localMatch && localMatch.password && localMatch.password !== 'admin' && (r.password === 'admin' || !r.password)) {
                 return { ...r, password: localMatch.password };
               }
@@ -223,7 +240,7 @@ export default function App() {
           // Sync active session if user credentials were updated in Google Sheets
           setCurrentUser(prev => {
             if (!prev) return prev;
-            const matchingRemote = remoteUsers.find(u => u.id === prev.id || u.email?.toLowerCase() === prev.email?.toLowerCase() || u.name?.toUpperCase() === prev.name?.toUpperCase());
+            const matchingRemote = remoteUsers.find(u => u.id === prev.id || u.email?.toLowerCase() === prev.email?.toLowerCase() || normalizeName(u.name) === normalizeName(prev.name));
             if (matchingRemote) {
               const normRemote = normalizeUser(matchingRemote);
               const updatedSession = (prev.password && prev.password !== 'admin' && normRemote.password === 'admin')
@@ -276,7 +293,7 @@ export default function App() {
     }
 
     // If updating the currently logged-in user (e.g. Administrator Marcote), update active session
-    if (currentUser && (currentUser.id === formattedUser.id || currentUser.name.toUpperCase() === formattedUser.name.toUpperCase())) {
+    if (currentUser && (currentUser.id === formattedUser.id || normalizeName(currentUser.name) === normalizeName(formattedUser.name))) {
       setCurrentUser(formattedUser);
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(formattedUser));
     }
@@ -315,17 +332,7 @@ export default function App() {
   // Load dataset strictly from active user's key
   const [causas, setCausas] = useState(() => {
     if (!currentUser) return [];
-    const key = getUserStorageKey(currentUser);
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(c => isCausaForUser(c, currentUser));
-        }
-      } catch (e) {}
-    }
-    return [];
+    return getInitialLocalCausas(currentUser);
   });
 
   // Re-load dataset and fetch Google Sheets data strictly for current active user (Google Sheets is Single Source of Truth)
@@ -340,16 +347,7 @@ export default function App() {
     const targetUserName = (currentUser.name || '').trim().toUpperCase();
 
     // 1. Immediately switch local causas state to clean user-isolated cache
-    const saved = localStorage.getItem(currentKey);
-    let initialLocal = [];
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          initialLocal = parsed.filter(c => isCausaForUser(c, currentUser));
-        }
-      } catch (e) {}
-    }
+    const initialLocal = getInitialLocalCausas(currentUser);
     setCausas(initialLocal);
     setLoadedUserKey(currentKey);
 
