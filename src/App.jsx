@@ -106,36 +106,12 @@ function mergeRemoteAndLocalCausas(remoteList = [], localList = [], localSaveTim
   const localArr = Array.isArray(localList) ? localList : [];
 
   const targetUserName = currentUser ? (currentUser.name || '').trim().toUpperCase() : '';
-
-  // 1. Tag remote items with targetUserName if usuario_nombre is missing (since remoteList comes from currentUser's sheet tab)
-  const taggedRemote = remoteArr.map(r => ({
-    ...r,
-    usuario_nombre: r.usuario_nombre || targetUserName
-  }));
-
   const now = Date.now();
   const RECENT_SAVE_WINDOW_MS = 180000; // 3 minutes grace period for local edits to sync completely
 
   const map = new Map();
 
-  // 2. Add all remote causes fetched from Google Sheets unless recently deleted locally
-  taggedRemote.forEach(r => {
-    if (r && (r.id || r.ipp)) {
-      if (currentUser && !isCausaForUser(r, currentUser)) return;
-
-      const idKey = String(r.id || '').trim().toLowerCase();
-      const ippKey = String(r.ipp || '').trim().toLowerCase();
-      const key = idKey || ippKey;
-
-      const isDeletedId = idKey && localSaveTimestamps[`deleted_${idKey}`] && (now - localSaveTimestamps[`deleted_${idKey}`] < RECENT_SAVE_WINDOW_MS);
-      const isDeletedIpp = ippKey && localSaveTimestamps[`deleted_${ippKey}`] && (now - localSaveTimestamps[`deleted_${ippKey}`] < RECENT_SAVE_WINDOW_MS);
-      if (isDeletedId || isDeletedIpp) return;
-
-      map.set(key, r);
-    }
-  });
-
-  // 2. Keep local causes ONLY if they belong to this user AND were recently saved locally
+  // 1. Seed map with ALL valid local causes for this user (so local dataset is never lost)
   localArr.forEach(l => {
     if (l && (l.id || l.ipp)) {
       if (currentUser && !isCausaForUser(l, currentUser)) return;
@@ -148,23 +124,43 @@ function mergeRemoteAndLocalCausas(remoteList = [], localList = [], localSaveTim
       const isDeletedIpp = ippKey && localSaveTimestamps[`deleted_${ippKey}`] && (now - localSaveTimestamps[`deleted_${ippKey}`] < RECENT_SAVE_WINDOW_MS);
       if (isDeletedId || isDeletedIpp) return;
 
-      const lastSaveId = idKey ? localSaveTimestamps[idKey] : 0;
-      const lastSaveIpp = ippKey ? localSaveTimestamps[ippKey] : 0;
-      const lastSave = Math.max(lastSaveId || 0, lastSaveIpp || 0);
+      map.set(key, {
+        ...l,
+        usuario_nombre: l.usuario_nombre || targetUserName
+      });
+    }
+  });
 
-      if (!map.has(key)) {
+  // 2. Merge remote items into map (updating existing items or adding new remote items)
+  remoteArr.forEach(r => {
+    if (r && (r.id || r.ipp)) {
+      if (currentUser && !isCausaForUser(r, currentUser)) return;
+
+      const idKey = String(r.id || '').trim().toLowerCase();
+      const ippKey = String(r.ipp || '').trim().toLowerCase();
+      const key = idKey || ippKey;
+
+      const isDeletedId = idKey && localSaveTimestamps[`deleted_${idKey}`] && (now - localSaveTimestamps[`deleted_${idKey}`] < RECENT_SAVE_WINDOW_MS);
+      const isDeletedIpp = ippKey && localSaveTimestamps[`deleted_${ippKey}`] && (now - localSaveTimestamps[`deleted_${ippKey}`] < RECENT_SAVE_WINDOW_MS);
+      if (isDeletedId || isDeletedIpp) return;
+
+      const existingLocal = map.get(key);
+      if (existingLocal) {
+        const lastSaveId = idKey ? localSaveTimestamps[idKey] : 0;
+        const lastSaveIpp = ippKey ? localSaveTimestamps[ippKey] : 0;
+        const lastSave = Math.max(lastSaveId || 0, lastSaveIpp || 0);
+
         if (lastSave > 0 && (now - lastSave < RECENT_SAVE_WINDOW_MS)) {
-          map.set(key, {
-            ...l,
-            usuario_nombre: l.usuario_nombre || targetUserName
-          });
+          // Keep local version during grace period after an edit/create
+          return;
         }
-      } else if (lastSave > 0 && (now - lastSave < RECENT_SAVE_WINDOW_MS)) {
-        map.set(key, {
-          ...l,
-          usuario_nombre: l.usuario_nombre || targetUserName
-        });
       }
+
+      // Update existing item or add new remote item
+      map.set(key, {
+        ...r,
+        usuario_nombre: r.usuario_nombre || targetUserName
+      });
     }
   });
 

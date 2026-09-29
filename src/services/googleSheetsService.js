@@ -194,7 +194,42 @@ function getOrCreateSheet(userName) {
 
   const sheets = ss.getSheets();
 
-  // 1. Check exact normalized name match across existing non-USUARIOS sheets
+  // 1. Check exact normalized name match among non-USUARIOS sheets that have data (lastRow > 1)
+  if (normTarget) {
+    for (let i = 0; i < sheets.length; i++) {
+      const s = sheets[i];
+      const normName = normalizeName(s.getName());
+      if (normName === 'USUARIOS') continue;
+      if (normName === normTarget && s.getLastRow() > 1) {
+        return s;
+      }
+    }
+  }
+
+  // 2. If Marcote, search for legacy sheet names with data or first non-USUARIOS sheet with data
+  if (isMarcote) {
+    const legacyNames = ['SEBASTIAN MARCOTE', 'SEBASTIANMARCOTE', 'CAUSAS', 'HOJA 1', 'HOJA1', 'SHEET1', 'SHEET 1'];
+    for (let i = 0; i < sheets.length; i++) {
+      const s = sheets[i];
+      const normName = normalizeName(s.getName());
+      if (normName === 'USUARIOS') continue;
+      for (let j = 0; j < legacyNames.length; j++) {
+        if (normalizeName(legacyNames[j]) === normName && s.getLastRow() > 1) {
+          return s;
+        }
+      }
+    }
+
+    // Fallback A: Return first non-USUARIOS sheet that has data rows (> 1)
+    for (let i = 0; i < sheets.length; i++) {
+      const s = sheets[i];
+      if (normalizeName(s.getName()) !== 'USUARIOS' && s.getLastRow() > 1) {
+        return s;
+      }
+    }
+  }
+
+  // 3. Exact match check (even if empty) before creating a new tab
   if (normTarget) {
     for (let i = 0; i < sheets.length; i++) {
       const s = sheets[i];
@@ -204,32 +239,8 @@ function getOrCreateSheet(userName) {
         return s;
       }
     }
-  }
 
-  // 2. If user is Marcote, search for legacy sheet names ("SEBASTIÁN MARCOTE", "SEBASTIAN MARCOTE", "CAUSAS", "HOJA 1", "SHEET1") or fallback to first non-USUARIOS tab
-  if (isMarcote) {
-    const legacyNames = ['SEBASTIAN MARCOTE', 'SEBASTIANMARCOTE', 'CAUSAS', 'HOJA 1', 'HOJA1', 'SHEET1', 'SHEET 1'];
-    for (let i = 0; i < sheets.length; i++) {
-      const s = sheets[i];
-      const normName = normalizeName(s.getName());
-      if (normName === 'USUARIOS') continue;
-      for (let j = 0; j < legacyNames.length; j++) {
-        if (normalizeName(legacyNames[j]) === normName) {
-          return s;
-        }
-      }
-    }
-    // Fallback: Return first non-USUARIOS sheet for Marcote so his master causes are never lost
-    for (let i = 0; i < sheets.length; i++) {
-      const s = sheets[i];
-      if (normalizeName(s.getName()) !== 'USUARIOS') {
-        return s;
-      }
-    }
-  }
-
-  // 3. For secondary users, check fuzzy match
-  if (normTarget) {
+    // Fuzzy match check for secondary users
     for (let i = 0; i < sheets.length; i++) {
       const s = sheets[i];
       const normName = normalizeName(s.getName());
@@ -240,7 +251,17 @@ function getOrCreateSheet(userName) {
     }
   }
 
-  // 4. Create new sheet tab if none found
+  // 4. Fallback B for Marcote: Return first non-USUARIOS sheet if any exists
+  if (isMarcote) {
+    for (let i = 0; i < sheets.length; i++) {
+      const s = sheets[i];
+      if (normalizeName(s.getName()) !== 'USUARIOS') {
+        return s;
+      }
+    }
+  }
+
+  // 5. Create new sheet tab if none found
   const newSheetName = isMarcote ? 'SEBASTIÁN MARCOTE' : String(userName).trim().toUpperCase();
   const sheet = ss.insertSheet(newSheetName);
   cleanAndMigrateSheetHeaders(sheet);
