@@ -51,9 +51,9 @@ export function sortCausasByIppAndYear(causas) {
       return pB.year - pA.year;
     }
 
-    // Secondary sort: Cause number (ascending: 95, 790, 1020, 3778, 6011, 8767)
+    // Secondary sort: Cause number (descending: highest IPP numbers first e.g. 12020, 8767, 6011, 3778, 95)
     if (pA.num !== pB.num) {
-      return pA.num - pB.num;
+      return pB.num - pA.num;
     }
 
     // Tertiary sort: Carátula
