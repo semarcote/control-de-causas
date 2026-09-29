@@ -636,13 +636,10 @@ export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) 
                         <h4 className="text-xs font-bold text-white group-hover:text-blue-300 transition">
                           {aud.tipo}
                         </h4>
-                        <span className="font-mono text-[11px] font-bold text-blue-400">
+                        <span className="font-mono text-[11px] font-bold text-slate-300">
                           {aud.causa.ipp}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                        {aud.causa.caratula}
-                      </p>
                     </div>
 
                     {/* Location & Details */}

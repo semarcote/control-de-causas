@@ -65,14 +65,14 @@ export default function CausaSearchSelect({
   causas = [],
   selectedCausaId = '',
   onSelectCausa,
-  placeholder = 'Buscar o seleccionar causa por N° de IPP o Carátula...',
+  placeholder = 'Buscar por número de I.P.P....',
   required = false
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
 
-  // Sorted causas: Year descending, IPP number ascending
+  // Sorted causas: Year descending, IPP number descending
   const sortedCausas = useMemo(() => {
     return sortCausasByIppAndYear(causas);
   }, [causas]);
@@ -131,11 +131,11 @@ export default function CausaSearchSelect({
         }`}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Search className="h-4 w-4 text-blue-400 shrink-0" />
+          <Search className="h-4 w-4 text-slate-400 shrink-0" />
           
           <input
             type="text"
-            value={isOpen ? searchTerm : (selectedCausa ? `${selectedCausa.ipp} - ${selectedCausa.caratula}` : searchTerm)}
+            value={isOpen ? searchTerm : (selectedCausa ? selectedCausa.ipp : searchTerm)}
             onChange={(e) => {
               setSearchTerm(e.target.value);
               if (!isOpen) setIsOpen(true);
@@ -144,8 +144,8 @@ export default function CausaSearchSelect({
               e.stopPropagation();
               setIsOpen(true);
             }}
-            placeholder={selectedCausa ? `${selectedCausa.ipp} - ${selectedCausa.caratula}` : placeholder}
-            className="w-full bg-transparent text-xs text-white font-mono placeholder:text-slate-500 focus:outline-none truncate"
+            placeholder={selectedCausa ? selectedCausa.ipp : placeholder}
+            className="w-full bg-transparent text-xs text-white font-mono font-bold placeholder:text-slate-500 focus:outline-none truncate"
           />
         </div>
 
@@ -182,33 +182,18 @@ export default function CausaSearchSelect({
           {filteredCausas.length > 0 ? (
             filteredCausas.map((c) => {
               const isSelected = String(c.id) === String(selectedCausaId);
-              const p = parseIppParts(c.ipp);
 
               return (
                 <div
                   key={c.id}
                   onClick={() => handleSelect(c)}
-                  className={`p-2.5 rounded-lg cursor-pointer transition flex items-center justify-between text-xs gap-2 ${
+                  className={`p-2.5 px-3 rounded-lg cursor-pointer transition flex items-center justify-between text-xs font-mono font-bold ${
                     isSelected 
-                      ? 'bg-blue-600/20 text-white font-semibold border border-blue-500/40' 
-                      : 'hover:bg-slate-800/80 text-slate-200'
+                      ? 'bg-blue-600/30 text-white font-black' 
+                      : 'hover:bg-slate-800 text-slate-200'
                   }`}
                 >
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 text-[11px]">
-                        {c.ipp}
-                      </span>
-                      {p.year > 0 && (
-                        <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                          Año {p.year}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-300 truncate">
-                      {c.caratula || 'Sin carátula'}
-                    </p>
-                  </div>
+                  <span>{c.ipp}</span>
 
                   {isSelected && (
                     <Check className="h-4 w-4 text-blue-400 shrink-0" />
@@ -218,7 +203,7 @@ export default function CausaSearchSelect({
             })
           ) : (
             <div className="p-4 text-center text-xs text-slate-400 italic">
-              No se encontraron causas que coincidan con la búsqueda
+              No se encontraron causas
             </div>
           )}
         </div>
