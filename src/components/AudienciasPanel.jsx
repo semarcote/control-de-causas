@@ -17,6 +17,7 @@ import {
   Search
 } from 'lucide-react';
 import { formatDisplayDate, parseAnyDate } from './CausasTable';
+import CausaSearchSelect from './CausaSearchSelect';
 
 export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -591,19 +592,12 @@ export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) 
                 <label className="block text-slate-300 font-semibold mb-1">
                   Seleccionar Expediente / I.P.P. *
                 </label>
-                <select
-                  value={selectedCausaId}
-                  onChange={(e) => setSelectedCausaId(e.target.value)}
+                <CausaSearchSelect
+                  causas={causas}
+                  selectedCausaId={selectedCausaId}
+                  onSelectCausa={(id) => setSelectedCausaId(id)}
                   required
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-white font-mono focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">-- Seleccione una causa --</option>
-                  {causas.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.ipp} - {c.caratula}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               {/* Tipo & Fecha */}
