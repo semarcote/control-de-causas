@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Video,
   FileText,
-  Search
+  Search,
+  Ban
 } from 'lucide-react';
 import { formatDisplayDate, parseAnyDate } from './CausasTable';
 import CausaSearchSelect from './CausaSearchSelect';
@@ -26,6 +27,57 @@ export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) 
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedCausaId, setSelectedCausaId] = useState('');
+
+  // Disabled / Feriados dates state (stored as YYYY-MM-DD array in localStorage)
+  const [disabledDates, setDisabledDates] = useState(() => {
+    try {
+      const saved = localStorage.getItem('control_causas_disabled_dates');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('control_causas_disabled_dates', JSON.stringify(disabledDates));
+    } catch (e) {
+      console.error('Error saving disabled dates:', e);
+    }
+  }, [disabledDates]);
+
+  // Helper to get YYYY-MM-DD key from Date object or date string
+  const getDateKey = (dateInput) => {
+    if (!dateInput) return '';
+    let d = null;
+    if (dateInput instanceof Date) {
+      d = dateInput;
+    } else if (typeof dateInput === 'string') {
+      d = parseAnyDate(dateInput);
+    }
+    if (!d || isNaN(d.getTime())) return '';
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const isDateDisabled = (dateInput) => {
+    const key = getDateKey(dateInput);
+    return key ? disabledDates.includes(key) : false;
+  };
+
+  const toggleDisableDate = (dateInput) => {
+    const key = getDateKey(dateInput);
+    if (!key) return;
+    setDisabledDates(prev => {
+      if (prev.includes(key)) {
+        return prev.filter(k => k !== key);
+      } else {
+        return [...prev, key];
+      }
+    });
+  };
 
   // New Audiencia Form State
   const [newAudiencia, setNewAudiencia] = useState({
@@ -201,6 +253,11 @@ export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) 
       return;
     }
 
+    if (isDateDisabled(newAudiencia.fecha)) {
+      alert(`NO ES POSIBLE AGENDAR AUDIENCIA:\n\nEl día ${newAudiencia.fecha} está marcado como INHABILITADO / FERIADO. Por favor seleccione otra fecha.`);
+      return;
+    }
+
     const targetCausa = causas.find(c => String(c.id) === String(selectedCausaId));
     if (!targetCausa) return;
 
@@ -344,6 +401,7 @@ export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) 
               const cellDate = cell.date;
               const dateKey = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
               const dayAudiencias = audienciasByDateMap[dateKey] || [];
+              const isDisabled = disabledDates.includes(dateKey);
 
               const today = new Date();
               const isToday = (
@@ -362,8 +420,10 @@ export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) 
                 <div
                   key={idx}
                   onClick={() => setSelectedDate(isSelected ? null : cellDate)}
-                  className={`min-h-[68px] p-1.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                    !cell.isCurrentMonth
+                  className={`min-h-[68px] p-1.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between relative ${
+                    isDisabled
+                      ? 'bg-rose-950/40 border-rose-800/60 text-rose-300 hover:bg-rose-900/50'
+                      : !cell.isCurrentMonth
                       ? 'bg-slate-950/30 border-slate-900 text-slate-600 opacity-40'
                       : isSelected
                       ? 'bg-blue-900/40 border-blue-500 text-white shadow-lg ring-1 ring-blue-400'
@@ -379,11 +439,19 @@ export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) 
                       {cellDate.getDate()}
                     </span>
 
-                    {dayAudiencias.length > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-mono text-[10px] font-black border border-amber-500/40">
-                        {dayAudiencias.length}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {isDisabled && (
+                        <span className="px-1 py-0.2 rounded bg-rose-600/30 text-rose-300 font-mono text-[9px] font-bold border border-rose-500/40 flex items-center gap-0.5" title="Día inhabilitado / Feriado">
+                          <Ban className="h-2.5 w-2.5 text-rose-400" />
+                          Feriado
+                        </span>
+                      )}
+                      {dayAudiencias.length > 0 && (
+                        <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-mono text-[10px] font-black border border-amber-500/40">
+                          {dayAudiencias.length}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Day Mini Badges */}
@@ -407,18 +475,57 @@ export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) 
             })}
           </div>
 
-          {/* Selected Date Filter Banner */}
+          {/* Selected Date Filter & Toggle Banner */}
           {selectedDate && (
-            <div className="mt-4 p-2.5 rounded-xl bg-blue-950/40 border border-blue-500/30 flex items-center justify-between text-xs">
-              <span className="text-blue-300 font-semibold">
-                Filtrando por día: <strong className="text-white font-mono">{formatDisplayDate(selectedDate)}</strong>
-              </span>
-              <button
-                onClick={() => setSelectedDate(null)}
-                className="text-slate-400 hover:text-white underline font-bold"
-              >
-                Ver todos los días
-              </button>
+            <div className="mt-4 p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-300 font-semibold">
+                  Día seleccionado: <strong className="text-white font-mono">{formatDisplayDate(selectedDate)}</strong>
+                </span>
+                {isDateDisabled(selectedDate) ? (
+                  <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 font-bold border border-rose-500/40 text-[11px] flex items-center gap-1">
+                    <Ban className="h-3.5 w-3.5 text-rose-400" />
+                    Inhabilitado / Feriado
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40 text-[11px] flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                    Habilitado
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleDisableDate(selectedDate)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    isDateDisabled(selectedDate)
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
+                      : 'bg-rose-600/90 hover:bg-rose-600 text-white shadow-md'
+                  }`}
+                >
+                  {isDateDisabled(selectedDate) ? (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Habilitar Día
+                    </>
+                  ) : (
+                    <>
+                      <Ban className="h-3.5 w-3.5" />
+                      Anular Día (Feriado / Inhabilitado)
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(null)}
+                  className="text-slate-400 hover:text-white underline font-bold px-2 py-1"
+                >
+                  Ver todos los días
+                </button>
+              </div>
             </div>
           )}
 
@@ -629,10 +736,24 @@ export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) 
                     required
                     value={newAudiencia.fecha}
                     onChange={(e) => setNewAudiencia(prev => ({ ...prev, fecha: e.target.value }))}
-                    className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-white font-mono focus:border-blue-500 focus:outline-none"
+                    className={`w-full rounded-xl bg-slate-950 border p-2.5 text-white font-mono focus:outline-none ${
+                      isDateDisabled(newAudiencia.fecha)
+                        ? 'border-rose-500/80 bg-rose-950/20 text-rose-200 focus:border-rose-500'
+                        : 'border-slate-800 focus:border-blue-500'
+                    }`}
                   />
                 </div>
               </div>
+
+              {/* Warning if selected date is disabled */}
+              {isDateDisabled(newAudiencia.fecha) && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2">
+                  <Ban className="h-4 w-4 text-rose-400 shrink-0" />
+                  <span>
+                    El día <strong className="font-mono text-white">{newAudiencia.fecha}</strong> está marcado como <strong>INHABILITADO / FERIADO</strong>. No se pueden fijar audiencias en esta fecha.
+                  </span>
+                </div>
+              )}
 
               {/* Hora & Lugar */}
               <div className="grid grid-cols-2 gap-3">
@@ -686,7 +807,12 @@ export default function AudienciasPanel({ causas, onSelectCausa, onSaveCausa }) 
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-600/30"
+                  disabled={isDateDisabled(newAudiencia.fecha)}
+                  className={`px-4 py-2 rounded-xl font-bold transition ${
+                    isDateDisabled(newAudiencia.fecha)
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30'
+                  }`}
                 >
                   Guardar y Cerrar
                 </button>
