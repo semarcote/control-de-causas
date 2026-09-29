@@ -356,10 +356,12 @@ export default function App() {
       fetchCausasFromSheets(url, targetUserName)
         .then((remoteCausas) => {
           if (Array.isArray(remoteCausas)) {
-            const merged = mergeRemoteAndLocalCausas(remoteCausas, initialLocal, recentEditsRef.current, currentUser);
-            setCausas(merged);
+            setCausas(prev => {
+              const merged = mergeRemoteAndLocalCausas(remoteCausas, prev, recentEditsRef.current, currentUser);
+              localStorage.setItem(currentKey, JSON.stringify(merged));
+              return merged;
+            });
             setLoadedUserKey(currentKey);
-            localStorage.setItem(currentKey, JSON.stringify(merged));
           }
         })
         .catch((err) => {
