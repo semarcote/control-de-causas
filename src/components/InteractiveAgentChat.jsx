@@ -27,11 +27,71 @@ export default function InteractiveAgentChat({ causas = [], currentUser, onSelec
   }, [messages, isOpen]);
 
   // Knowledge engine over local causas dataset
+  // Knowledge engine over local causas dataset
   const processQuery = (queryText) => {
     const q = queryText.toLowerCase().trim();
     const now = new Date();
 
-    // 1. Query about urgent expirations / vencimientos (STRICTLY FOR CAUSAS EN TRÁMITE)
+    // 0. Clean stop words to extract core terms
+    const stopWords = ['mostrame', 'mostrar', 'dame', 'dar', 'ver', 'buscame', 'buscar', 'cuales', 'cual', 'que', 'las', 'los', 'les', 'la', 'el', 'un', 'una', 'de', 'del', 'en', 'por', 'con', 'para', 'sobre', 'hay', 'tengo', 'tenemos', 'mis'];
+    const queryTokens = q.split(/\s+/).filter(w => w.length > 2 && !stopWords.includes(w));
+
+    // 1. Query about Pericias & Estudios Periciales
+    if (q.includes('pericia') || q.includes('pericial') || q.includes('balistica') || q.includes('autopsia') || q.includes('adn') || q.includes('quimica') || q.includes('dactilo') || q.includes('psicolog') || q.includes('psiquiatr')) {
+      const matchingCauses = causas.filter(c => {
+        if (!c) return false;
+        const pDet = (c.pericia_detalle || '').toLowerCase();
+        const pArr = Array.isArray(c.pericias) ? c.pericias : [];
+        const pArrMatch = pArr.some(p => (p.tipo || '').toLowerCase().includes('pericia') || queryTokens.some(t => (p.tipo || '').toLowerCase().includes(t)));
+        const hasPer = (c.pericia_fecha || (c.pericias && c.pericias.length > 0));
+
+        if (queryTokens.length <= 1 && (q.includes('pericia') || q.includes('pericial'))) {
+          return hasPer;
+        }
+
+        return pArrMatch || queryTokens.some(t => pDet.includes(t) || (c.caratula || '').toLowerCase().includes(t) || (c.tramite || '').toLowerCase().includes(t));
+      });
+
+      if (matchingCauses.length === 0) {
+        return `🔬 **Sin registros de pericias**: No se encontraron causas en tu usuario que coincidan con la búsqueda de pericias ("${queryText}").`;
+      }
+
+      let response = `🔬 **Causas con Pericias encontradas (${matchingCauses.length}):**\n\n`;
+      matchingCauses.slice(0, 6).forEach((c, idx) => {
+        const perList = Array.isArray(c.pericias) && c.pericias.length > 0 
+          ? c.pericias.map(p => `• ${p.tipo} (${p.estado || 'En Proceso'}${p.fecha ? ' - Fecha: ' + p.fecha : ''})`).join('\n   ')
+          : (c.pericia_detalle || (c.pericia_fecha ? `Pericia fecha ${c.pericia_fecha}` : 'Pericia registrada'));
+
+        response += `${idx + 1}. **IPP ${c.ipp}** - *${c.caratula || 'Sin carátula'}*\n   ${perList}\n   ↳ Estado: ${c.estado || 'En trámite'}\n\n`;
+      });
+      return response;
+    }
+
+    // 2. Query about Audiencias & Citaciones
+    if (q.includes('audiencia') || q.includes('citacion') || q.includes('testimonial') || q.includes('vista')) {
+      const matchingCauses = causas.filter(c => {
+        if (!c) return false;
+        return Array.isArray(c.audiencias) && c.audiencias.length > 0;
+      });
+
+      if (matchingCauses.length === 0) {
+        return `📅 **Sin audiencias registradas**: No se registran audiencias o citaciones agendadas en tus causas.`;
+      }
+
+      let response = `📅 **Agenda de Audiencias encontradas (${matchingCauses.length} causas):**\n\n`;
+      let count = 0;
+      matchingCauses.forEach((c) => {
+        (c.audiencias || []).forEach(aud => {
+          count++;
+          if (count <= 6) {
+            response += `${count}. **IPP ${c.ipp}** (*${c.caratula}*)\n   ↳ **${aud.tipo}**: Fecha ${aud.fecha} ${aud.hora ? 'a las ' + aud.hora + ' hs' : ''} (${aud.lugar || 'UFI'}) - Estado: ${aud.estado || 'Programada'}\n\n`;
+          }
+        });
+      });
+      return response;
+    }
+
+    // 3. Query about urgent expirations / vencimientos (STRICTLY FOR CAUSAS EN TRÁMITE)
     if (q.includes('vencimiento') || q.includes('urgente') || q.includes('plazo') || q.includes('prision') || q.includes('preventiva')) {
       const urgentList = causas.filter(c => {
         if (!c) return false;
@@ -55,7 +115,7 @@ export default function InteractiveAgentChat({ causas = [], currentUser, onSelec
       return response;
     }
 
-    // 2. Query about detainees / detenidos (STRICTLY FOR CAUSAS EN TRÁMITE)
+    // 4. Query about detainees / detenidos (STRICTLY FOR CAUSAS EN TRÁMITE)
     if (q.includes('detenido') || q.includes('preso') || q.includes('aprehendido') || q.includes('carcel')) {
       const detenidosList = causas.filter(c => {
         if (!c) return false;
@@ -74,7 +134,7 @@ export default function InteractiveAgentChat({ causas = [], currentUser, onSelec
       return response;
     }
 
-    // 3. Request to draft an "Acta Art. 308" or legal document
+    // 5. Request to draft an "Acta Art. 308" or legal document
     if (q.includes('redact') || q.includes('acta') || q.includes('308') || q.includes('escrito') || q.includes('borrador')) {
       const sampleCausa = causas[0];
       const ippStr = sampleCausa ? sampleCausa.ipp : '18-01-008767-26/00';
@@ -97,32 +157,50 @@ En la ciudad de Escobar, a los ${new Date().getDate()} días del mes de ${new Da
 *(Podés copiar este texto directamente para tus actuaciones)*`;
     }
 
-    // 4. Search specific IPP or name
-    const matches = causas.filter(c => {
-      if (!c) return false;
-      const ippMatch = (c.ipp || '').toLowerCase().includes(q);
-      const carMatch = (c.caratula || '').toLowerCase().includes(q);
-      return ippMatch || carMatch;
-    });
+    // 6. Flexible Multi-Token Search across ALL fields (IPP, Carátula, Trámite, Pericias, Estado)
+    if (queryTokens.length > 0) {
+      const keywordMatches = causas.filter(c => {
+        if (!c) return false;
+        const ippStr = (c.ipp || '').toLowerCase();
+        const carStr = (c.caratula || '').toLowerCase();
+        const traStr = (c.tramite || '').toLowerCase();
+        const denStr = (c.denunciado_en || '').toLowerCase();
+        const estStr = (c.estado || '').toLowerCase();
+        const perStr = (c.pericia_detalle || '').toLowerCase();
+        const pArr = Array.isArray(c.pericias) ? c.pericias.map(p => (p.tipo || '').toLowerCase()).join(' ') : '';
 
-    if (matches.length > 0) {
-      let response = `🔍 **Expedientes encontrados para tu búsqueda (${matches.length}):**\n\n`;
-      matches.slice(0, 4).forEach((c, idx) => {
-        response += `${idx + 1}. **IPP ${c.ipp}** - *${c.caratula}*\n   ↳ Estado: ${c.estado} | Ingreso: ${c.fecha_inicio || c.revisado || 'N/D'}\n\n`;
+        return queryTokens.some(t => 
+          ippStr.includes(t) || 
+          carStr.includes(t) || 
+          traStr.includes(t) || 
+          denStr.includes(t) || 
+          estStr.includes(t) ||
+          perStr.includes(t) ||
+          pArr.includes(t)
+        );
       });
-      return response;
+
+      if (keywordMatches.length > 0) {
+        let response = `🔍 **Resultados encontrados para "${queryText}" (${keywordMatches.length} causas):**\n\n`;
+        keywordMatches.slice(0, 5).forEach((c, idx) => {
+          const perInfo = (c.pericias && c.pericias.length > 0) ? `\n   ↳ Pericias: ${c.pericias.map(p => `${p.tipo} (${p.estado})`).join(', ')}` : '';
+          response += `${idx + 1}. **IPP ${c.ipp}** - *${c.caratula}*\n   ↳ Estado: ${c.estado}${perInfo}\n   ↳ Último Trámite: ${c.tramite ? (c.tramite.length > 70 ? c.tramite.substring(0, 70) + '...' : c.tramite) : 'Sin registro'}\n\n`;
+        });
+        return response;
+      }
     }
 
-    // 5. Default intelligent summary response
-    const enTramiteCount = causas.filter(c => c && c.estado === 'En Trámite').length;
+    // 7. Default summary response if no matches found
+    const enTramiteCount = causas.filter(c => c && !isFinalizedState(c.estado, c.tramite)).length;
     return `📊 **Resumen General de tu Fiscalía:**
-Actualmente tenés **${causas.length} causas registradas** en el sistema (**${enTramiteCount} causas activas en trámite**).
+Actualmente tenés **${causas.length} causas registradas** (**${enTramiteCount} causas activas en trámite**).
 
 Podés pedirme:
+• *"Mostrame pericias balísticas"* (o cualquier pericia)
 • *"¿Qué vencimientos tengo urgentes?"*
 • *"Lista de detenidos"*
-• *"Redactar acta Art. 308"*
-• *"Buscar causa por IPP o carátula"*`;
+• *"Redactar borrador de acta 308"*
+• *"Buscar causas de homicidio / abuso / estafa / apellido"*`;
   };
 
   const handleSendMessage = (e) => {
