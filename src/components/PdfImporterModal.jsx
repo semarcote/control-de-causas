@@ -25,11 +25,11 @@ export function parseCausesFromText(rawText) {
   const results = [];
   const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  // PBA IPP regex matcher: 18-XX-XXXXXX-YY/ZZ or XX-XX-XXXXXX-YY/ZZ
-  const fullIppRegex = /(?:18-)?(\d{2})-(\d{1,6})-(\d{2})(?:\/(\d{2}))?/gi;
+  // PBA / SIMP IPP regex matcher: PP-18-01-XXXXXX-YY/ZZ or 18-01-XXXXXX-YY/ZZ
+  const simpIppRegex = /(?:PP-)?(?:18-)?(\d{2})-(\d{1,6})-(\d{2})(?:\/(\d{2}))?/gi;
 
   let match;
-  while ((match = fullIppRegex.exec(rawText)) !== null) {
+  while ((match = simpIppRegex.exec(rawText)) !== null) {
     const rawIpp = match[0];
     const dept = match[1].padStart(2, '0');
     const num = match[2].padStart(6, '0');
@@ -37,26 +37,44 @@ export function parseCausesFromText(rawText) {
     const suf = match[4] ? match[4].padStart(2, '0') : '00';
     const formattedIpp = `18-${dept}-${num}-${year}/${suf}`;
 
-    const startIndex = Math.max(0, match.index - 80);
-    const endIndex = Math.min(rawText.length, match.index + 220);
+    const startIndex = Math.max(0, match.index - 50);
+    const endIndex = Math.min(rawText.length, match.index + 300);
     const snippet = rawText.substring(startIndex, endIndex);
 
-    // Extract carátula if present
+    // Extract dates (e.g. 25/08/2026)
+    const dates = snippet.match(/\b\d{2}\/\d{2}\/\d{4}\b/g) || [];
+    const fechaInicio = dates[0] || todayStr;
+
+    // Detect Forma Inicio / Origen
+    let denunciadoEn = 'Mesa de Entradas';
+    const snipLower = snippet.toLowerCase();
+    if (snipLower.includes('sede policial') || snipLower.includes('acta de procedimiento')) {
+      denunciadoEn = 'Sede Policial';
+    } else if (snipLower.includes('denuncia en ufi') || snipLower.includes('sede judicial')) {
+      denunciadoEn = 'Denuncia UFI';
+    } else if (snipLower.includes('miba') || snipLower.includes('digital')) {
+      denunciadoEn = 'Mesa de Entradas';
+    } else if (snipLower.includes('por escrito')) {
+      denunciadoEn = 'Mesa de Entradas';
+    }
+
+    // Extract Carátula or Forma Inicio description
     let caratula = '';
-    const caratulaMatch = snippet.match(/(?:(?:[A-ZÁÉÍÓÚÑ]{2,}\s+){1,4}(?:S\/|C\/|s\/|c\/)\s*(?:[A-ZÁÉÍÓÚÑ\s,]{3,40}))/i);
+    const caratulaMatch = snippet.match(/(?:(?:[A-ZÁÉÍÓÚÑ]{2,}\s+){1,4}(?:S\/|C\/|s\/|c\/)\s*(?:[A-ZÁÉÍÓÚÑ\s,]{3,50}))/i);
     if (caratulaMatch) {
       caratula = caratulaMatch[0].trim().toUpperCase();
     } else {
-      const afterIpp = rawText.substring(match.index + rawIpp.length, match.index + rawIpp.length + 80);
-      const cleanAfter = afterIpp.split('\n')[0].replace(/^[\s:\-\–]+/, '').trim();
-      if (cleanAfter.length >= 3) {
-        caratula = cleanAfter.substring(0, 60).toUpperCase();
+      // Look for Forma de Inicio text in SIMP report
+      const formaMatch = snippet.match(/(Acta de procedimiento[^\n]*|En Sede Judicial[^\n]*|Denuncia iniciada[^\n]*|En sede judicial[^\n]*|Denuncia digital[^\n]*)/i);
+      if (formaMatch) {
+        caratula = formaMatch[0].trim().toUpperCase();
+      } else {
+        caratula = `PROCESO SIMP ${formattedIpp}`;
       }
     }
 
-    // Detect estado
+    // Detect Estado
     let estado = 'En Trámite';
-    const snipLower = snippet.toLowerCase();
     if (snipLower.includes('archiv')) estado = 'Archivada';
     else if (snipLower.includes('elevad')) estado = 'Elevada a Juicio';
     else if (snipLower.includes('paradero')) estado = 'Paradero';
@@ -69,14 +87,14 @@ export function parseCausesFromText(rawText) {
       results.push({
         id: `pdf-imp-${Date.now()}-${results.length}`,
         ipp: formattedIpp,
-        caratula: caratula || 'S/ CARÁTULA EXTRAÍDA DE PDF',
+        caratula: caratula,
         estado,
-        denunciado_en: 'Mesa de Entradas',
-        revisado: todayStr,
+        denunciado_en: denunciadoEn,
+        revisado: fechaInicio,
         revisar_dias: '10',
         detenido: 'NO',
-        sumario: 'NO',
-        tramite: 'Carga masiva realizada desde reporte PDF'
+        sumario: denunciadoEn.includes('Mesa') || denunciadoEn.includes('Digital') ? 'SÍ' : 'NO',
+        tramite: `Ingresado desde reporte SIMP (Fecha Inicio: ${fechaInicio})`
       });
     }
   }
