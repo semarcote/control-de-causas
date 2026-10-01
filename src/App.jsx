@@ -10,7 +10,6 @@ import ExpirationPanel, { getDaysRemaining, getExpirationEvents } from './compon
 import AudienciasPanel from './components/AudienciasPanel';
 import EmailAlertModal from './components/EmailAlertModal';
 import PdfImporterModal from './components/PdfImporterModal';
-import InteractiveAgentChat from './components/InteractiveAgentChat';
 import {
   getStoredSheetsUrl,
   fetchCausasFromSheets,
@@ -968,13 +967,6 @@ export default function App() {
           onImportCausas={handleMassImportCausas}
         />
       )}
-
-      {/* Interactive AI Agent Chatbot */}
-      <InteractiveAgentChat
-        causas={userCausas}
-        currentUser={currentUser}
-        onSelectCausa={(causa) => setSelectedCausa(causa)}
-      />
 
     </div>
   );
