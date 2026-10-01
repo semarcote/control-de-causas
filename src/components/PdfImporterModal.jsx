@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Upload, FileText, Check, AlertTriangle, X, Download, Eye, Sparkles, Database, FileUp, CheckCircle2, Ban, Plus } from 'lucide-react';
+import { Upload, FileText, Check, AlertTriangle, X, Download, Eye, Sparkles, Database, FileUp, CheckCircle2, Ban, Plus, FileSpreadsheet } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
+import * as XLSX from 'xlsx';
 
 // Worker configuration for pdfjs-dist browser parsing
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
+// 1. Extract raw text from PDF files
 export async function extractTextFromPdfFile(file) {
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
@@ -20,6 +22,146 @@ export async function extractTextFromPdfFile(file) {
   return fullText;
 }
 
+// 2. Download sample Excel template for users
+export function downloadExcelTemplate() {
+  const templateData = [
+    [
+      'I.P.P. (Número Causa)',
+      'Carátula / Imputado y Delito',
+      'Estado',
+      'Lugar de Inicio / Denuncia',
+      'Último Trámite',
+      'Detenido (SI/NO)'
+    ],
+    [
+      '18-01-001234-26/00',
+      'PEREZ JUAN CARLOS S/ ROBO CALIFICADO',
+      'En Trámite',
+      'Sede Policial',
+      'Ingreso causa a la UFI 10',
+      'NO'
+    ],
+    [
+      '18-01-005678-26/00',
+      'GONZALEZ MARIA S/ HURTO SIMPLE',
+      'Archivada',
+      'Mesa de Entradas',
+      'Archivada según art. 268 CPP',
+      'NO'
+    ],
+    [
+      '18-01-009988-26/00',
+      'RODRIGUEZ PEDRO S/ AMENAZAS',
+      'Elevada a Juicio',
+      'Denuncia UFI',
+      'Elevada al Juzgado de Garantías N° 2',
+      'SI'
+    ]
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(templateData);
+  ws['!cols'] = [
+    { wch: 22 }, // IPP
+    { wch: 45 }, // Caratula
+    { wch: 18 }, // Estado
+    { wch: 25 }, // Lugar Inicio
+    { wch: 40 }, // Ultimo tramite
+    { wch: 16 }  // Detenido
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Plantilla Causas');
+  XLSX.writeFile(wb, 'Plantilla_Carga_Masiva_Causas.xlsx');
+}
+
+// 3. Parse Excel files (.xlsx, .xls, .csv)
+export async function parseCausesFromExcelFile(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  const results = [];
+  const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  workbook.SheetNames.forEach((sheetName) => {
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+    if (!rows || rows.length === 0) return;
+
+    let headerIdx = -1;
+    let colMap = { ipp: -1, caratula: -1, estado: -1, denunciado_en: -1, tramite: -1, detenido: -1 };
+
+    for (let r = 0; r < Math.min(rows.length, 10); r++) {
+      const row = rows[r].map(c => String(c).trim().toLowerCase());
+      const ippCol = row.findIndex(c => c.includes('ipp') || c.includes('causa') || c.includes('numero') || c.includes('expediente'));
+      if (ippCol !== -1) {
+        headerIdx = r;
+        colMap.ipp = ippCol;
+        colMap.caratula = row.findIndex(c => c.includes('caratula') || c.includes('delito') || c.includes('imputado'));
+        colMap.estado = row.findIndex(c => c.includes('estado'));
+        colMap.denunciado_en = row.findIndex(c => c.includes('inicio') || c.includes('denuncia') || c.includes('origen') || c.includes('dependencia') || c.includes('lugar'));
+        colMap.tramite = row.findIndex(c => c.includes('tramite') || c.includes('actuacion') || c.includes('novedad') || c.includes('ultimo'));
+        colMap.detenido = row.findIndex(c => c.includes('detenido') || c.includes('preso'));
+        break;
+      }
+    }
+
+    if (headerIdx !== -1 && colMap.ipp !== -1) {
+      for (let r = headerIdx + 1; r < rows.length; r++) {
+        const row = rows[r];
+        if (!row || row.length === 0) continue;
+
+        const rawIppVal = String(row[colMap.ipp] || '').trim();
+        if (!rawIppVal) continue;
+
+        const match = rawIppVal.match(/(?:PP-)?(?:18-)?(\d{2})-(\d{1,6})-(\d{2})(?:\/(\d{2}))?/i);
+        let formattedIpp = rawIppVal;
+        if (match) {
+          const dept = match[1].padStart(2, '0');
+          const num = match[2].padStart(6, '0');
+          const year = match[3].padStart(2, '0');
+          const suf = match[4] ? match[4].padStart(2, '0') : '00';
+          formattedIpp = `18-${dept}-${num}-${year}/${suf}`;
+        }
+
+        if (!formattedIpp.includes('18-') && formattedIpp.length < 8) continue;
+
+        const caratula = colMap.caratula !== -1 && row[colMap.caratula] ? String(row[colMap.caratula]).trim().toUpperCase() : `PROCESO ${formattedIpp}`;
+        const estado = colMap.estado !== -1 && row[colMap.estado] ? String(row[colMap.estado]).trim() : 'En Trámite';
+        const denunciadoEn = colMap.denunciado_en !== -1 && row[colMap.denunciado_en] ? String(row[colMap.denunciado_en]).trim() : 'Mesa de Entradas';
+        const tramite = colMap.tramite !== -1 && row[colMap.tramite] ? String(row[colMap.tramite]).trim() : `Ingresado desde planilla Excel (${sheetName})`;
+        const detenido = colMap.detenido !== -1 && row[colMap.detenido] ? (String(row[colMap.detenido]).trim().toUpperCase().startsWith('S') ? 'SI' : 'NO') : 'NO';
+
+        if (!results.some(res => res.ipp === formattedIpp)) {
+          results.push({
+            id: `excel-imp-${Date.now()}-${results.length}`,
+            ipp: formattedIpp,
+            caratula: caratula || `PROCESO ${formattedIpp}`,
+            estado: estado || 'En Trámite',
+            denunciado_en: denunciadoEn || 'Mesa de Entradas',
+            revisado: todayStr,
+            revisar_dias: '10',
+            detenido: detenido,
+            sumario: denunciadoEn.toLowerCase().includes('mesa') ? 'SÍ' : 'NO',
+            tramite: tramite
+          });
+        }
+      }
+    }
+
+    // Unstructured text / regex fallback on Excel content
+    const allSheetText = rows.map(r => r.join(' ')).join('\n');
+    const regexParsed = parseCausesFromText(allSheetText);
+    regexParsed.forEach(regItem => {
+      if (!results.some(r => r.ipp === regItem.ipp)) {
+        results.push(regItem);
+      }
+    });
+  });
+
+  return results;
+}
+
+// 4. Parse text blocks / SIMP text
 export function parseCausesFromText(rawText) {
   if (!rawText) return [];
   const results = [];
@@ -30,7 +172,6 @@ export function parseCausesFromText(rawText) {
 
   let match;
   while ((match = simpIppRegex.exec(rawText)) !== null) {
-    const rawIpp = match[0];
     const dept = match[1].padStart(2, '0');
     const num = match[2].padStart(6, '0');
     const year = match[3].padStart(2, '0');
@@ -41,7 +182,7 @@ export function parseCausesFromText(rawText) {
     const endIndex = Math.min(rawText.length, match.index + 300);
     const snippet = rawText.substring(startIndex, endIndex);
 
-    // Extract dates (e.g. 25/08/2026)
+    // Extract dates
     const dates = snippet.match(/\b\d{2}\/\d{2}\/\d{4}\b/g) || [];
     const fechaInicio = dates[0] || todayStr;
 
@@ -54,17 +195,14 @@ export function parseCausesFromText(rawText) {
       denunciadoEn = 'Denuncia UFI';
     } else if (snipLower.includes('miba') || snipLower.includes('digital')) {
       denunciadoEn = 'Mesa de Entradas';
-    } else if (snipLower.includes('por escrito')) {
-      denunciadoEn = 'Mesa de Entradas';
     }
 
-    // Extract Carátula or Forma Inicio description
+    // Extract Carátula
     let caratula = '';
     const caratulaMatch = snippet.match(/(?:(?:[A-ZÁÉÍÓÚÑ]{2,}\s+){1,4}(?:S\/|C\/|s\/|c\/)\s*(?:[A-ZÁÉÍÓÚÑ\s,]{3,50}))/i);
     if (caratulaMatch) {
       caratula = caratulaMatch[0].trim().toUpperCase();
     } else {
-      // Look for Forma de Inicio text in SIMP report
       const formaMatch = snippet.match(/(Acta de procedimiento[^\n]*|En Sede Judicial[^\n]*|Denuncia iniciada[^\n]*|En sede judicial[^\n]*|Denuncia digital[^\n]*)/i);
       if (formaMatch) {
         caratula = formaMatch[0].trim().toUpperCase();
@@ -122,7 +260,7 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
     return set;
   }, [causas]);
 
-  // Handle PDF file upload
+  // Handle File Upload (PDF, XLSX, XLS, CSV)
   const handleFileUpload = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -130,9 +268,21 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
     setIsExtracting(true);
 
     try {
-      const text = await extractTextFromPdfFile(file);
-      setExtractedText(text);
-      const items = parseCausesFromText(text);
+      const ext = file.name.split('.').pop().toLowerCase();
+      let items = [];
+
+      if (ext === 'pdf') {
+        const text = await extractTextFromPdfFile(file);
+        setExtractedText(text);
+        items = parseCausesFromText(text);
+      } else if (['xlsx', 'xls', 'csv'].includes(ext)) {
+        items = await parseCausesFromExcelFile(file);
+        setExtractedText(`Planilla Excel procesada: ${file.name}`);
+      } else {
+        alert('Formato no soportado. Seleccione un archivo Excel (.xlsx, .xls), CSV (.csv) o PDF (.pdf)');
+        return;
+      }
+
       setParsedCauses(items);
 
       // Select all non-duplicate items by default
@@ -145,8 +295,8 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
       });
       setSelectedItemsMap(initialMap);
     } catch (err) {
-      console.error('Error al procesar el archivo PDF:', err);
-      alert('Ocurrió un error al leer el archivo PDF. Asegúrese de que sea un PDF válido.');
+      console.error('Error al procesar el archivo:', err);
+      alert('Ocurrió un error al leer el archivo. Verifique que el archivo no esté dañado.');
     } finally {
       setIsExtracting(false);
     }
@@ -224,43 +374,55 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/90 p-4 px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
               <FileUp className="h-5 w-5" />
             </div>
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                Carga Masiva de Causas Leyendo PDF
-                <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-black text-blue-300 border border-blue-500/30">
-                  Lectura Automática
+                Carga Masiva de Causas (Excel, PDF, CSV y SIMP)
+                <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-[10px] font-black text-indigo-300 border border-indigo-500/30">
+                  Importador Automático
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Extraiga e importe listados de I.P.P. desde reportes PDF o textos de actuaciones
+                Suba planillas Excel, archivos PDF o pegue textos de actuaciones del SIMP
               </p>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={downloadExcelTemplate}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition shadow-sm cursor-pointer"
+              title="Descargar plantilla Excel oficial pre-estructurada"
+            >
+              <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
+              <span>Plantilla Excel</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Tab Selection: PDF File Upload vs Manual Text */}
+        {/* Tab Selection: File Upload vs Manual Text */}
         <div className="flex items-center gap-2 px-6 pt-3 bg-slate-950/40 border-b border-slate-800 text-xs">
           <button
             type="button"
             onClick={() => setActiveTab('upload')}
             className={`px-4 py-2 font-bold rounded-t-xl border-t border-x transition flex items-center gap-2 ${
               activeTab === 'upload'
-                ? 'bg-slate-900 text-blue-400 border-slate-700'
+                ? 'bg-slate-900 text-indigo-400 border-slate-700'
                 : 'bg-transparent text-slate-400 border-transparent hover:text-slate-200'
             }`}
           >
             <Upload className="h-4 w-4" />
-            <span>Subir Archivo PDF</span>
+            <span>Subir Archivo Excel / PDF</span>
           </button>
 
           <button
@@ -268,7 +430,7 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
             onClick={() => setActiveTab('text')}
             className={`px-4 py-2 font-bold rounded-t-xl border-t border-x transition flex items-center gap-2 ${
               activeTab === 'text'
-                ? 'bg-slate-900 text-blue-400 border-slate-700'
+                ? 'bg-slate-900 text-indigo-400 border-slate-700'
                 : 'bg-transparent text-slate-400 border-transparent hover:text-slate-200'
             }`}
           >
@@ -280,30 +442,44 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
         {/* Modal Body */}
         <div className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
           
-          {/* Tab 1: PDF Upload Dropzone */}
+          {/* Tab 1: File Upload Dropzone (Excel, PDF, CSV) */}
           {activeTab === 'upload' && (
             <div className="space-y-3">
-              <label className="relative flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-2xl bg-slate-950/60 cursor-pointer transition text-center group">
+              <label className="relative flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-950/60 cursor-pointer transition text-center group">
                 <input
                   type="file"
-                  accept=".pdf"
+                  accept=".xlsx,.xls,.csv,.pdf"
                   onChange={handleFileUpload}
                   className="sr-only"
                 />
-                <FileUp className="h-10 w-10 text-blue-400 group-hover:scale-110 transition-transform mb-2" />
+                <FileUp className="h-10 w-10 text-indigo-400 group-hover:scale-110 transition-transform mb-2" />
                 <p className="text-sm font-bold text-white">
-                  Haga clic para seleccionar o arrastre un archivo PDF
+                  Haga clic para seleccionar o arrastre un archivo Excel (.xlsx, .xls, .csv) o PDF
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  Admite reportes del SIMP, listados de mesa de entradas, calendarios u oficios judiciales
+                  Admite planillas personalizadas, plantillas oficiales, reportes SIMP o calendarios judiciales
                 </p>
 
                 {fileName && (
-                  <div className="mt-3 px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-300 font-mono text-xs font-bold border border-blue-500/40">
-                    Archivo cargado: {fileName}
+                  <div className="mt-3 px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-300 font-mono text-xs font-bold border border-indigo-500/40">
+                    Archivo seleccionado: {fileName}
                   </div>
                 )}
               </label>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
+                  ¿Necesita un formato de archivo guía?
+                </span>
+                <button
+                  type="button"
+                  onClick={downloadExcelTemplate}
+                  className="text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer"
+                >
+                  Descargar Plantilla Excel de Ejemplo
+                </button>
+              </div>
             </div>
           )}
 
@@ -311,19 +487,19 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
           {activeTab === 'text' && (
             <div className="space-y-3">
               <label className="block text-slate-300 font-semibold">
-                Pegue aquí el texto copiado de un reporte PDF o sistema SIMP:
+                Pegue aquí el texto copiado de una planilla, PDF o del sistema SIMP:
               </label>
               <textarea
                 rows={5}
                 value={manualTextInput}
                 onChange={(e) => setManualTextInput(e.target.value)}
                 placeholder="Ejemplo: IPP 18-01-008767-26/00 SALVATIERRA S/ ABUSO SEXUAL - EN TRAMITE..."
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-white font-mono focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-white font-mono focus:border-indigo-500 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={handleProcessManualText}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition flex items-center gap-2 shadow-lg shadow-blue-600/20"
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition flex items-center gap-2 shadow-lg shadow-indigo-600/20 cursor-pointer"
               >
                 <Sparkles className="h-4 w-4" />
                 Procesar e Identificar Causas en Texto
@@ -333,10 +509,10 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
 
           {/* Loading Indicator */}
           {isExtracting && (
-            <div className="p-6 text-center rounded-2xl bg-blue-950/30 border border-blue-500/30 space-y-2">
-              <div className="h-6 w-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-bold text-blue-300">
-                Leyendo archivo PDF y analizando patrones de IPP...
+            <div className="p-6 text-center rounded-2xl bg-indigo-950/30 border border-indigo-500/30 space-y-2">
+              <div className="h-6 w-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs font-bold text-indigo-300">
+                Procesando archivo y extrayendo registros de I.P.P...
               </p>
             </div>
           )}
@@ -348,9 +524,9 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
               <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800">
                 <div className="flex items-center gap-2">
                   <span className="text-slate-300 font-semibold">
-                    Causas detectadas en el PDF: <strong className="text-white font-mono">{parsedCauses.length}</strong>
+                    Causas detectadas en el archivo: <strong className="text-white font-mono">{parsedCauses.length}</strong>
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold text-[11px] border border-blue-500/30">
+                  <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold text-[11px] border border-indigo-500/30">
                     {countSelectedToImport} seleccionadas para importar
                   </span>
                 </div>
@@ -358,7 +534,7 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
                 <button
                   type="button"
                   onClick={toggleSelectAll}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition cursor-pointer"
                 >
                   {parsedCauses.every(c => selectedItemsMap[c.id]) ? 'Desmarcar Todas' : 'Seleccionar Todas'}
                 </button>
@@ -371,8 +547,8 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
                     <tr>
                       <th className="p-2.5 text-center w-10">Importar</th>
                       <th className="p-2.5">Número I.P.P.</th>
-                      <th className="p-2.5">Carátula Extraída</th>
-                      <th className="p-2.5">Estado Detectado</th>
+                      <th className="p-2.5">Carátula / Imputado</th>
+                      <th className="p-2.5">Estado</th>
                       <th className="p-2.5 text-center">Validación</th>
                     </tr>
                   </thead>
@@ -383,7 +559,7 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
                       const isAlreadyInSystem = existingIppSet.has(normIpp);
 
                       return (
-                        <tr key={item.id} className={`transition hover:bg-slate-800/40 ${isSelected ? 'bg-blue-950/20' : ''}`}>
+                        <tr key={item.id} className={`transition hover:bg-slate-800/40 ${isSelected ? 'bg-indigo-950/20' : ''}`}>
                           
                           {/* Checkbox */}
                           <td className="p-2.5 text-center">
@@ -391,7 +567,7 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => handleToggleItem(item.id)}
-                              className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                             />
                           </td>
 
@@ -401,7 +577,7 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
                               type="text"
                               value={item.ipp}
                               onChange={(e) => handleUpdateItemField(item.id, 'ipp', e.target.value)}
-                              className="bg-slate-950 text-amber-300 font-bold px-2 py-1 rounded border border-slate-800 w-full focus:border-blue-500 focus:outline-none"
+                              className="bg-slate-950 text-amber-300 font-bold px-2 py-1 rounded border border-slate-800 w-full focus:border-indigo-500 focus:outline-none"
                             />
                           </td>
 
@@ -411,7 +587,7 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
                               type="text"
                               value={item.caratula}
                               onChange={(e) => handleUpdateItemField(item.id, 'caratula', e.target.value.toUpperCase())}
-                              className="bg-slate-950 text-slate-200 px-2 py-1 rounded border border-slate-800 w-full focus:border-blue-500 focus:outline-none truncate"
+                              className="bg-slate-950 text-slate-200 px-2 py-1 rounded border border-slate-800 w-full focus:border-indigo-500 focus:outline-none truncate"
                             />
                           </td>
 
@@ -420,7 +596,7 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
                             <select
                               value={item.estado}
                               onChange={(e) => handleUpdateItemField(item.id, 'estado', e.target.value)}
-                              className="bg-slate-950 text-slate-300 px-2 py-1 rounded border border-slate-800 focus:border-blue-500 focus:outline-none text-xs cursor-pointer"
+                              className="bg-slate-950 text-slate-300 px-2 py-1 rounded border border-slate-800 focus:border-indigo-500 focus:outline-none text-xs cursor-pointer"
                             >
                               <option value="En Trámite">En Trámite</option>
                               <option value="Archivada">Archivada</option>
@@ -465,7 +641,7 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
                 No se encontraron números de I.P.P. con formato judicial en el archivo procesado.
               </p>
               <p className="text-[11px] text-slate-500">
-                Asegúrese de que el PDF contenga texto seleccionable con números de I.P.P. (ej. 18-01-008767-26/00).
+                Asegúrese de que la planilla Excel o PDF contenga números de I.P.P. (ej. 18-01-001234-26/00).
               </p>
             </div>
           )}
@@ -477,7 +653,7 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs"
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs cursor-pointer"
           >
             Cancelar
           </button>
@@ -489,7 +665,7 @@ export default function PdfImporterModal({ causas = [], onClose, onImportCausas 
             className={`px-5 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 shadow-lg ${
               countSelectedToImport === 0
                 ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30'
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 cursor-pointer'
             }`}
           >
             <Plus className="h-4 w-4" />

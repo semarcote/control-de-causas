@@ -69,10 +69,10 @@ export default function Header({
             <button
               onClick={onOpenPdfImporter}
               className="flex items-center gap-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 px-3.5 py-2 text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
-              title="Importación masiva de causas leyendo archivos PDF o textos del SIMP"
+              title="Importación masiva de causas desde planillas Excel, archivos PDF o datos del SIMP"
             >
-              <FileUp className="h-4 w-4" />
-              <span>Carga Masiva PDF</span>
+              <FileUp className="h-4 w-4 text-indigo-400" />
+              <span>Carga Masiva (Excel / PDF)</span>
             </button>
           )}
 
