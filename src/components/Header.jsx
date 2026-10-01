@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Scale, Plus, Download, RefreshCw, Clock, ShieldAlert, Users, LogOut, Calendar, Files, AlertTriangle, FileSpreadsheet, Mail } from 'lucide-react';
+import { Scale, Plus, Download, RefreshCw, Clock, ShieldAlert, Users, LogOut, Calendar, Files, AlertTriangle, FileSpreadsheet, Mail, FileUp } from 'lucide-react';
 
 export default function Header({
   totalCausas,
@@ -10,6 +10,7 @@ export default function Header({
   activePage,
   onPageChange,
   onNewCausa,
+  onOpenPdfImporter,
   onOpenEmailModal,
   onExportData,
   onResetData,
@@ -61,6 +62,17 @@ export default function Header({
             >
               <Mail className="h-4 w-4" />
               <span className="hidden md:inline">Alertas por Email</span>
+            </button>
+          )}
+
+          {onOpenPdfImporter && (
+            <button
+              onClick={onOpenPdfImporter}
+              className="flex items-center gap-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 px-3.5 py-2 text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+              title="Importación masiva de causas leyendo archivos PDF o textos del SIMP"
+            >
+              <FileUp className="h-4 w-4" />
+              <span>Carga Masiva PDF</span>
             </button>
           )}
 

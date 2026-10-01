@@ -9,6 +9,7 @@ import UserManagementModal from './components/UserManagementModal';
 import ExpirationPanel, { getDaysRemaining, getExpirationEvents } from './components/ExpirationPanel';
 import AudienciasPanel from './components/AudienciasPanel';
 import EmailAlertModal from './components/EmailAlertModal';
+import PdfImporterModal from './components/PdfImporterModal';
 import {
   getStoredSheetsUrl,
   fetchCausasFromSheets,
@@ -311,6 +312,7 @@ export default function App() {
 
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [isPdfImporterOpen, setIsPdfImporterOpen] = useState(false);
 
   // Track recent local edits timestamps to prevent 30s background fetch race conditions
   const recentEditsRef = React.useRef({});
@@ -677,6 +679,39 @@ export default function App() {
     }
   };
 
+  const handleMassImportCausas = (newCausasArray = []) => {
+    if (!Array.isArray(newCausasArray) || newCausasArray.length === 0) return;
+
+    const formattedList = newCausasArray.map((c, idx) => {
+      const causaWithUser = {
+        ...c,
+        id: c.id || `c-mass-${Date.now()}-${idx}`,
+        usuario_nombre: c.usuario_nombre || currentUser?.name || '',
+        usuario_id: c.usuario_id || currentUser?.id || ''
+      };
+      markLocalEdit(causaWithUser);
+      return causaWithUser;
+    });
+
+    setCausas(prev => {
+      const nextList = [...formattedList, ...prev];
+      if (currentUser) {
+        const currentKey = getUserStorageKey(currentUser);
+        localStorage.setItem(currentKey, JSON.stringify(nextList));
+      }
+      return nextList;
+    });
+
+    const sheetsUrl = getStoredSheetsUrl();
+    if (sheetsUrl) {
+      formattedList.forEach(item => {
+        createCausaInSheets(sheetsUrl, item, currentUser?.name).catch(e => console.error('Background sync mass import error:', e));
+      });
+    }
+
+    alert(`¡Éxito! Se han importado ${formattedList.length} causas correctamente al sistema.`);
+  };
+
   const handleDeleteCausa = (id) => {
     const causaToDelete = causas.find(c => c.id === id);
     if (window.confirm('¿Está seguro de eliminar esta causa del sistema?')) {
@@ -777,6 +812,7 @@ export default function App() {
         activePage={activePage}
         onPageChange={setActivePage}
         onNewCausa={() => setIsCreating(true)}
+        onOpenPdfImporter={() => setIsPdfImporterOpen(true)}
         onOpenEmailModal={() => setIsEmailModalOpen(true)}
         onExportData={handleExportData}
         onResetData={handleResetData}
@@ -909,6 +945,15 @@ export default function App() {
         causas={causas}
         userName={currentUser?.name}
       />
+
+      {/* PDF Mass Importer Modal */}
+      {isPdfImporterOpen && (
+        <PdfImporterModal
+          causas={causas}
+          onClose={() => setIsPdfImporterOpen(false)}
+          onImportCausas={handleMassImportCausas}
+        />
+      )}
 
     </div>
   );
