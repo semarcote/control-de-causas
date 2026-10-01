@@ -26,6 +26,7 @@ import {
 } from './services/googleSheetsService';
 
 import { isFinalizedState, causaHasSumario, getCausaIngresoDate, parseAnyDate, isCausaRevisar, isCausaEsperar, getVencimientoIPP, checkPPStatusSpecial, hasPericias } from './components/CausasTable';
+import { exportFilteredCausasToPdf } from './utils/pdfExport';
 
 const STORAGE_KEY = 'control_causas_ufi10_v12';
 const USERS_STORAGE_KEY = 'control_causas_ufi10_users_v2';
@@ -588,6 +589,17 @@ export default function App() {
   }, [causas, searchTerm, statusFilter, sumarioFilter, vencimientoTypeFilter, inicioFilter, fechaDesdeFilter, sortBy]);
 
   // Handlers
+  const handleExportPdf = () => {
+    exportFilteredCausasToPdf({
+      causas: filteredCausas,
+      currentUser,
+      statusFilter,
+      searchTerm,
+      inicioFilter,
+      fechaDesdeFilter
+    });
+  };
+
   const handleSaveCausa = (updatedCausa) => {
     if (!updatedCausa) return;
     const causaWithUser = {
@@ -846,6 +858,7 @@ export default function App() {
               onSortByChange={setSortBy}
               totalResults={filteredCausas.length}
               onClearFilters={handleClearFilters}
+              onExportPdf={handleExportPdf}
             />
 
             <CausasTable

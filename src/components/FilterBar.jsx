@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, ArrowUpDown, X, FileText, MapPin, Calendar, Clock, ShieldAlert, Activity } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, X, FileText, MapPin, Calendar, Clock, ShieldAlert, Activity, Download } from 'lucide-react';
 import { INICIO_OPTIONS, formatDateMask } from './CausasTable';
 
 export default function FilterBar({
@@ -21,7 +21,8 @@ export default function FilterBar({
   sortBy,
   onSortByChange,
   totalResults,
-  onClearFilters
+  onClearFilters,
+  onExportPdf
 }) {
   const hasActiveFilters = searchTerm !== '' || statusFilter !== 'en trámite' || sumarioFilter !== 'todos' || vencimientoTypeFilter !== 'todos' || (inicioFilter && inicioFilter !== 'todos') || fechaDesdeFilter !== '';
 
@@ -65,8 +66,19 @@ export default function FilterBar({
           )}
         </div>
 
-        {/* Sort selector */}
+        {/* Sort selector & Export PDF */}
         <div className="flex items-center gap-2">
+          {onExportPdf && (
+            <button
+              onClick={onExportPdf}
+              className="flex items-center gap-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/40 px-3.5 py-2.5 text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+              title="Exportar listado de causas actualmente visible a archivo PDF"
+            >
+              <Download className="h-4 w-4 text-red-400" />
+              <span>Exportar PDF</span>
+            </button>
+          )}
+
           <ArrowUpDown className="h-4 w-4 text-slate-400 shrink-0" />
           <select
             value={sortBy}
