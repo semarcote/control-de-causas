@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Bot, Send, X, Sparkles, AlertCircle, FileText, Calendar, Clock, ChevronRight, User, Shield, Search } from 'lucide-react';
-import { parseAnyDate, formatDisplayDate, checkPPStatusSpecial, getVencimientoIPP } from './CausasTable';
+import { parseAnyDate, formatDisplayDate, checkPPStatusSpecial, getVencimientoIPP, isFinalizedState } from './CausasTable';
 
 export default function InteractiveAgentChat({ causas = [], currentUser, onSelectCausa }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -31,36 +31,43 @@ export default function InteractiveAgentChat({ causas = [], currentUser, onSelec
     const q = queryText.toLowerCase().trim();
     const now = new Date();
 
-    // 1. Query about urgent expirations / vencimientos
+    // 1. Query about urgent expirations / vencimientos (STRICTLY FOR CAUSAS EN TRÁMITE)
     if (q.includes('vencimiento') || q.includes('urgente') || q.includes('plazo') || q.includes('prision') || q.includes('preventiva')) {
       const urgentList = causas.filter(c => {
         if (!c) return false;
+        if (isFinalizedState(c.estado, c.tramite)) return false;
+
         const ippDate = getVencimientoIPP(c);
         const pp1 = c.vencimiento_pp1 || c.vencimiento_pp;
         return (ippDate && !checkPPStatusSpecial(ippDate)) || (c.detenido === 'SI' && pp1 && !checkPPStatusSpecial(pp1));
       });
 
       if (urgentList.length === 0) {
-        return `✅ **Sin vencimientos críticos inminentes**: No se registran plazos de Prisión Preventiva ni vencimientos de IPP vencidos o en alerta en tus causas cargadas.`;
+        return `✅ **Sin vencimientos críticos inminentes**: No se registran plazos de Prisión Preventiva ni vencimientos de IPP en tus causas en trámite.`;
       }
 
-      let response = `🚨 **Diagnóstico de Vencimientos Cargados (${urgentList.length} causas):**\n\n`;
+      let response = `🚨 **Diagnóstico de Vencimientos en Causas en Trámite (${urgentList.length}):**\n\n`;
       urgentList.slice(0, 5).forEach((c, idx) => {
         const vIPP = c.vencimiento_ipp ? `Venc. IPP: ${c.vencimiento_ipp}` : '';
         const vPP = c.vencimiento_pp1 ? `1º Venc. PP: ${c.vencimiento_pp1}` : '';
-        response += `${idx + 1}. **IPP ${c.ipp}** - *${c.caratula || 'Sin carátula'}*\n   ↳ ${vPP || vIPP} (Estado: ${c.estado || 'En trámite'})\n\n`;
+        response += `${idx + 1}. **IPP ${c.ipp}** - *${c.caratula || 'Sin carátula'}*\n   ↳ ${vPP || vIPP} (Estado: En trámite)\n\n`;
       });
       return response;
     }
 
-    // 2. Query about detainees / detenidos
+    // 2. Query about detainees / detenidos (STRICTLY FOR CAUSAS EN TRÁMITE)
     if (q.includes('detenido') || q.includes('preso') || q.includes('aprehendido') || q.includes('carcel')) {
-      const detenidosList = causas.filter(c => c && (c.detenido === 'SI' || c.detenido === 'SÍ'));
+      const detenidosList = causas.filter(c => {
+        if (!c) return false;
+        if (isFinalizedState(c.estado, c.tramite)) return false;
+        return c.detenido === 'SI' || c.detenido === 'SÍ';
+      });
+
       if (detenidosList.length === 0) {
-        return `ℹ️ **Sin detenidos registrados**: Actualmente no tenés causas registradas con personas privadas de la libertad en tu usuario.`;
+        return `ℹ️ **Sin detenidos registrados en trámite**: Actualmente no tenés causas en trámite con personas privadas de la libertad.`;
       }
 
-      let response = `⛓️ **Registro de Detenidos (${detenidosList.length} causas):**\n\n`;
+      let response = `⛓️ **Registro de Detenidos en Causas en Trámite (${detenidosList.length}):**\n\n`;
       detenidosList.forEach((c, idx) => {
         response += `${idx + 1}. **IPP ${c.ipp}** - *${c.caratula}*\n   ↳ Detenido desde: ${c.fecha_detencion || 'Sin fecha'} | PP1: ${c.vencimiento_pp1 || 'N/D'}\n\n`;
       });
