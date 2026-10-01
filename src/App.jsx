@@ -645,6 +645,14 @@ export default function App() {
   };
 
   const handleCreateCausa = (newCausa) => {
+    if (!newCausa || !newCausa.ipp) return;
+    const normTarget = newCausa.ipp.trim().toLowerCase().replace(/\s+/g, '');
+    const existing = (causas || []).find(c => c && c.ipp && c.ipp.trim().toLowerCase().replace(/\s+/g, '') === normTarget);
+    if (existing) {
+      alert(`NO ES POSIBLE REGISTRAR LA CAUSA:\n\nLa I.P.P. ${newCausa.ipp} ya se encuentra registrada en el sistema con estado "${existing.estado || 'Registrada'}".\n\nNo se permite el ingreso de causas duplicadas.`);
+      return;
+    }
+
     const causaWithUser = {
       ...newCausa,
       id: newCausa.id || `c-${Date.now()}`,
@@ -869,6 +877,7 @@ export default function App() {
       {/* Modal New Causa */}
       {isCreating && (
         <NewCausaModal
+          causas={causas}
           onClose={() => setIsCreating(false)}
           onCreate={handleCreateCausa}
         />

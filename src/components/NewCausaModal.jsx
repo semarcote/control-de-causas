@@ -1,9 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { X, Plus, Scale, FileText, Unlock, UserCheck, AlertTriangle } from 'lucide-react';
 import { calculatePP2Date, checkPPStatusSpecial, isDateInPast, calculatePPDatesFromDetencion, calculateFlagranciaIPPDates, formatDateMask, formatCaratulaMask, isDateInFuture, isValidDateString, INICIO_OPTIONS, isPPMaxDaysExceeded, calculate4MonthsIPPDate, calculateIPPDateWithMonths, parseIPPProrrogas } from './CausasTable';
 import OrigenSelect from './OrigenSelect';
 
-export default function NewCausaModal({ onClose, onCreate }) {
+export default function NewCausaModal({ causas = [], onClose, onCreate }) {
   const todayStr = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const currentYear2Digits = new Date().getFullYear().toString().slice(-2);
   const caratulaInputRef = useRef(null);
@@ -43,20 +43,38 @@ export default function NewCausaModal({ onClose, onCreate }) {
     tramite: ''
   });
 
+  const currentDeptFormatted = (ippDept || '01').replace(/\D/g, '').padStart(2, '0').slice(-2);
+  const currentNumFormatted = ippNumber.replace(/\D/g, '');
+  const currentPaddedNum = currentNumFormatted ? currentNumFormatted.padStart(6, '0') : '000000';
+  const currentYearFormatted = (ippYear || currentYear2Digits).replace(/\D/g, '').padStart(2, '0').slice(-2);
+  const currentSuffixFormatted = (ippSuffix || '00').replace(/\D/g, '').padStart(2, '0').slice(-2);
+  const currentFullFormattedIPP = `18-${currentDeptFormatted}-${currentPaddedNum}-${currentYearFormatted}/${currentSuffixFormatted}`;
+
+  const duplicateCausa = useMemo(() => {
+    if (!currentNumFormatted || currentNumFormatted === '000000') return null;
+    const normTarget = currentFullFormattedIPP.trim().toLowerCase().replace(/\s+/g, '');
+    return (causas || []).find(c => c && c.ipp && c.ipp.trim().toLowerCase().replace(/\s+/g, '') === normTarget);
+  }, [causas, currentFullFormattedIPP, currentNumFormatted]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    const cleanDept = (ippDept || '01').replace(/\D/g, '').padStart(2, '0').slice(-2);
-    const cleanNum = ippNumber.replace(/\D/g, '');
+    if (duplicateCausa) {
+      alert(`NO ES POSIBLE REGISTRAR LA CAUSA:\n\nEl número de I.P.P. ${currentFullFormattedIPP} ya se encuentra registrado en el sistema con estado "${duplicateCausa.estado || 'Registrada'}" (Carátula: "${duplicateCausa.caratula || 'Sin carátula'}").\n\nNo se permite el ingreso de causas duplicadas en el sistema.`);
+      return;
+    }
+
+    const cleanDept = currentDeptFormatted;
+    const cleanNum = currentNumFormatted;
     if (!cleanNum && !formData.caratula.trim()) {
       alert('Por favor ingrese al menos los números del IPP o la Carátula de la causa.');
       return;
     }
 
-    const paddedNum = cleanNum ? cleanNum.padStart(6, '0') : '000000';
-    const cleanYear = (ippYear || currentYear2Digits).replace(/\D/g, '').padStart(2, '0').slice(-2);
-    const cleanSuffix = (ippSuffix || '00').replace(/\D/g, '').padStart(2, '0').slice(-2);
-    const fullFormattedIPP = `18-${cleanDept}-${paddedNum}-${cleanYear}/${cleanSuffix}`;
+    const paddedNum = currentPaddedNum;
+    const cleanYear = currentYearFormatted;
+    const cleanSuffix = currentSuffixFormatted;
+    const fullFormattedIPP = currentFullFormattedIPP;
 
     if (formData.detenido === 'SI') {
       if (!formData.fecha_detencion || !formData.fecha_detencion.trim()) {
@@ -226,9 +244,18 @@ export default function NewCausaModal({ onClose, onCreate }) {
               <div className="flex items-center justify-between px-1 text-[11px]">
                 <span className="text-slate-500">Formato Resultante:</span>
                 <span className="font-mono font-bold text-blue-400">
-                  {`18-${(ippDept || '01').padStart(2, '0').slice(-2)}-${(ippNumber.replace(/\D/g, '') || '000000').padStart(6, '0')}-${(ippYear || currentYear2Digits).padStart(2, '0').slice(-2)}/${ippSuffix || '00'}`}
+                  {currentFullFormattedIPP}
                 </span>
               </div>
+
+              {duplicateCausa && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2 mt-2">
+                  <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                  <span>
+                    🚫 La I.P.P. <strong className="font-mono text-white">{duplicateCausa.ipp}</strong> ya está ingresada en el sistema (Estado: <strong>{duplicateCausa.estado || 'Registrada'}</strong>). No se permite el ingreso duplicado.
+                  </span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -694,7 +721,12 @@ export default function NewCausaModal({ onClose, onCreate }) {
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 font-semibold text-white shadow-lg hover:bg-blue-500 transition"
+              disabled={!!duplicateCausa}
+              className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 font-semibold text-white shadow-lg transition ${
+                duplicateCausa
+                  ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-500'
+              }`}
             >
               <Plus className="h-4 w-4" />
               Guardar y Cerrar
